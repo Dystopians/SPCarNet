@@ -1,0 +1,68 @@
+[
+  {
+    "scene": "counter",
+    "view": "00001.png",
+    "crop": {
+      "x": 239,
+      "y": 95,
+      "w": 360,
+      "h": 240,
+      "score": 2.7734697141568176e-05
+    },
+    "metrics": {
+      "v48_local_psnr": 32.239314176214066,
+      "v52_local_psnr": 32.266100882953666,
+      "local_dpsnr": 0.02678670673959971,
+      "v48_local_mae": 0.014575905166566372,
+      "v52_local_mae": 0.014496853575110435,
+      "local_mae_delta": 7.905159145593643e-05
+    },
+    "v48_render": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/test/ours_26000_counter_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/renders/00001.png",
+    "v52_render": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/counter/renders/00001.png",
+    "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/counter/gt/00001.png"
+  },
+  {
+    "scene": "kitchen",
+    "view": "00010.png",
+    "crop": {
+      "x": 309,
+      "y": 23,
+      "w": 360,
+      "h": 240,
+      "score": 1.792941111489199e-05
+    },
+    "metrics": {
+      "v48_local_psnr": 34.90451981545962,
+      "v52_local_psnr": 34.92847286323473,
+      "local_dpsnr": 0.02395304777510887,
+      "v48_local_mae": 0.012306478805840015,
+      "v52_local_mae": 0.01225683931261301,
+      "local_mae_delta": 4.9639493227005005e-05
+    },
+    "v48_render": "/dev/shm/peilincai_spcarnet_v48_full9_20260623/kitchen_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/test/ours_26000_kitchen_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/renders/00010.png",
+    "v52_render": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/kitchen/renders/00010.png",
+    "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/kitchen/gt/00010.png"
+  },
+  {
+    "scene": "bonsai",
+    "view": "00008.png",
+    "crop": {
+      "x": 1075,
+      "y": 0,
+      "w": 360,
+      "h": 240,
+      "score": 1.5301107850973494e-05
+    },
+    "metrics": {
+      "v48_local_psnr": 33.77743395811408,
+      "v52_local_psnr": 33.79635427835914,
+      "local_dpsnr": 0.01892032024505852,
+      "v48_local_mae": 0.013169101439416409,
+      "v52_local_mae": 0.013126497156918049,
+      "local_mae_delta": 4.260428249835968e-05
+    },
+    "v48_render": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/test/ours_26000_bonsai_v48_autosupport_autocap_guarded_v42calib_region_texture_adapter/renders/00008.png",
+    "v52_render": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/bonsai/renders/00008.png",
+    "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/bonsai/gt/00008.png"
+  }
+]

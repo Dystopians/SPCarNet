@@ -87,6 +87,8 @@ def _view_paths(evidence_dir: Path, *, max_views: int, view_stride: int, view_of
 def _component_regions(
     path: Path,
     *,
+    residual_l1_key: str,
+    residual_rgb_key: str,
     residual_quantile: float,
     min_residual_l1: float,
     min_alpha: float,
@@ -98,9 +100,11 @@ def _component_regions(
 ) -> list[dict[str, Any]]:
     data = np.load(path)
     face_id = data["face_id"].astype(np.int64, copy=False)
-    residual_l1 = data["residual_l1"].astype(np.float32, copy=False)
+    if str(residual_l1_key) not in data.files:
+        raise KeyError(f"{path} missing residual L1 field: {residual_l1_key}")
+    residual_l1 = data[str(residual_l1_key)].astype(np.float32, copy=False)
     alpha = data["alpha"].astype(np.float32, copy=False) if "alpha" in data else np.ones_like(residual_l1)
-    residual_rgb = data["residual_rgb"].astype(np.float32, copy=False) if "residual_rgb" in data else None
+    residual_rgb = data[str(residual_rgb_key)].astype(np.float32, copy=False) if str(residual_rgb_key) in data.files else None
     valid = (face_id >= 0) & np.isfinite(residual_l1) & (alpha >= float(min_alpha))
     valid_values = residual_l1[valid]
     if valid_values.size == 0:
@@ -399,6 +403,8 @@ def main() -> int:
     parser.add_argument("--max_views", type=int, default=12)
     parser.add_argument("--view_stride", type=int, default=1)
     parser.add_argument("--view_offset", type=int, default=0)
+    parser.add_argument("--residual_l1_key", default="residual_l1")
+    parser.add_argument("--residual_rgb_key", default="residual_rgb")
     parser.add_argument("--residual_quantile", type=float, default=0.92)
     parser.add_argument("--min_residual_l1", type=float, default=0.03)
     parser.add_argument("--min_alpha", type=float, default=0.05)
@@ -433,6 +439,8 @@ def main() -> int:
         regions.extend(
             _component_regions(
                 path,
+                residual_l1_key=str(args.residual_l1_key),
+                residual_rgb_key=str(args.residual_rgb_key),
                 residual_quantile=float(args.residual_quantile),
                 min_residual_l1=float(args.min_residual_l1),
                 min_alpha=float(args.min_alpha),
@@ -464,6 +472,8 @@ def main() -> int:
         "evidence_dir_out": str(evidence_dir_out) if evidence_dir_out is not None else "",
         "settings": {
             "residual_quantile": float(args.residual_quantile),
+            "residual_l1_key": str(args.residual_l1_key),
+            "residual_rgb_key": str(args.residual_rgb_key),
             "min_residual_l1": float(args.min_residual_l1),
             "min_alpha": float(args.min_alpha),
             "min_pixels": int(args.min_pixels),

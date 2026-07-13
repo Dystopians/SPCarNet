@@ -273,6 +273,50 @@ def _load_surface_residual_field(path, report_path, endpoint_method):
         ):
             raise RuntimeError("v102 surface residual field has invalid mixture triangle_view_scales")
         triangle_count = int(base.shape[0])
+    elif basis_type == "affine_barycentric_viewdir_pod_mixture":
+        base = payload.get("triangle_base_coefficients", None)
+        expert_delta = payload.get("triangle_expert_delta_coefficients", None)
+        reliability = payload.get("triangle_expert_reliability", None)
+        mse_scale = payload.get("triangle_expert_mse_scale", None)
+        descent_scale = payload.get("triangle_expert_descent_scale", None)
+        base_keep = payload.get("triangle_occlusion_base_keep", None)
+        if not torch.is_tensor(base) or base.ndim != 3 or tuple(base.shape[1:]) != (6, 3):
+            raise RuntimeError("v106 POD field has invalid triangle_base_coefficients")
+        if not torch.is_tensor(expert_delta) or expert_delta.ndim != 4 or tuple(expert_delta.shape[2:]) != (6, 3):
+            raise RuntimeError("v106 POD field has invalid triangle_expert_delta_coefficients")
+        if int(expert_delta.shape[0]) != int(base.shape[0]) or int(expert_delta.shape[1]) != 2:
+            raise RuntimeError("v106 POD field expects exactly two experts per triangle")
+        if not torch.is_tensor(reliability) or reliability.ndim != 2 or tuple(reliability.shape) != (int(base.shape[0]), 2):
+            raise RuntimeError("v106 POD field has invalid triangle_expert_reliability")
+        if mse_scale is not None and (
+            not torch.is_tensor(mse_scale) or mse_scale.ndim != 2 or tuple(mse_scale.shape) != (int(base.shape[0]), 2)
+        ):
+            raise RuntimeError("v106 POD field has invalid triangle_expert_mse_scale")
+        if descent_scale is not None and (
+            not torch.is_tensor(descent_scale)
+            or descent_scale.ndim != 2
+            or tuple(descent_scale.shape) != (int(base.shape[0]), 2)
+        ):
+            raise RuntimeError("v108 POD field has invalid triangle_expert_descent_scale")
+        if not torch.is_tensor(base_keep) or base_keep.ndim != 1 or int(base_keep.numel()) != int(base.shape[0]):
+            raise RuntimeError("v106 POD field has invalid triangle_occlusion_base_keep")
+        keep_mode = str(payload.get("pod_base_keep_mode", "occlusion_replace") or "occlusion_replace")
+        if keep_mode not in {"occlusion_replace", "base_preserving_boundary"}:
+            raise RuntimeError(f"v106 POD field has invalid pod_base_keep_mode: {keep_mode}")
+        view_gate_mode = str(payload.get("pod_view_gate_mode", "implicit_unit_temperature") or "implicit_unit_temperature")
+        if view_gate_mode not in {"implicit_unit_temperature", "temperature_controlled"}:
+            raise RuntimeError(f"v106 POD field has invalid pod_view_gate_mode: {view_gate_mode}")
+        view_means = payload.get("triangle_view_means", None)
+        view_scales = payload.get("triangle_view_scales", None)
+        if view_means is not None and (
+            not torch.is_tensor(view_means) or view_means.ndim != 2 or tuple(view_means.shape) != (int(base.shape[0]), 3)
+        ):
+            raise RuntimeError("v106 POD field has invalid triangle_view_means")
+        if view_scales is not None and (
+            not torch.is_tensor(view_scales) or view_scales.ndim != 2 or tuple(view_scales.shape) != (int(base.shape[0]), 3)
+        ):
+            raise RuntimeError("v106 POD field has invalid triangle_view_scales")
+        triangle_count = int(base.shape[0])
     elif basis_type in {"", "constant"}:
         residuals = payload.get("triangle_residuals", None)
         if not torch.is_tensor(residuals) or residuals.ndim != 2 or int(residuals.shape[1]) != 3:
@@ -305,6 +349,54 @@ def _downsample_rend_ids_nearest(rend_ids, target_hw):
     if int(sampled.shape[-2]) != target_h or int(sampled.shape[-1]) != target_w:
         sampled = sampled[:target_h, :target_w]
     return sampled.long()
+
+
+def _runtime_unit_score(score, valid=None):
+    score = torch.nan_to_num(score.detach().float(), nan=0.0, posinf=0.0, neginf=0.0).clamp_min(0.0)
+    sample = score[valid] if valid is not None and bool(valid.any().item()) else score.reshape(-1)
+    sample = sample[sample > 0.0]
+    if int(sample.numel()) == 0:
+        return torch.zeros_like(score)
+    scale = torch.quantile(sample, 0.90).clamp_min(1.0e-6)
+    return (score / scale).clamp(0.0, 1.0)
+
+
+def _runtime_detail_score(rendering):
+    lum = 0.299 * rendering[0].detach().float() + 0.587 * rendering[1].detach().float() + 0.114 * rendering[2].detach().float()
+    score = torch.zeros_like(lum)
+    score[:, 1:] = torch.maximum(score[:, 1:], (lum[:, 1:] - lum[:, :-1]).abs())
+    score[:, :-1] = torch.maximum(score[:, :-1], (lum[:, 1:] - lum[:, :-1]).abs())
+    score[1:, :] = torch.maximum(score[1:, :], (lum[1:, :] - lum[:-1, :]).abs())
+    score[:-1, :] = torch.maximum(score[:-1, :], (lum[1:, :] - lum[:-1, :]).abs())
+    return _runtime_unit_score(score)
+
+
+def _runtime_boundary_score(ids, pkg):
+    valid_ids = ids >= 0
+    boundary = torch.zeros_like(ids, dtype=torch.float32)
+    diff_x = (ids[:, 1:] != ids[:, :-1]) & valid_ids[:, 1:] & valid_ids[:, :-1]
+    diff_y = (ids[1:, :] != ids[:-1, :]) & valid_ids[1:, :] & valid_ids[:-1, :]
+    boundary[:, 1:] = torch.maximum(boundary[:, 1:], diff_x.float())
+    boundary[:, :-1] = torch.maximum(boundary[:, :-1], diff_x.float())
+    boundary[1:, :] = torch.maximum(boundary[1:, :], diff_y.float())
+    boundary[:-1, :] = torch.maximum(boundary[:-1, :], diff_y.float())
+    depth = pkg.get("surf_depth", None) if isinstance(pkg, dict) else None
+    if depth is not None:
+        if depth.ndim == 3:
+            depth = depth[0]
+        if tuple(depth.shape) != tuple(ids.shape):
+            depth = torch.nn.functional.interpolate(
+                depth.reshape(1, 1, int(depth.shape[-2]), int(depth.shape[-1])).float(),
+                size=ids.shape,
+                mode="nearest",
+            )[0, 0]
+        dscore = torch.zeros_like(depth, dtype=torch.float32)
+        dscore[:, 1:] = torch.maximum(dscore[:, 1:], (depth[:, 1:] - depth[:, :-1]).abs())
+        dscore[:, :-1] = torch.maximum(dscore[:, :-1], (depth[:, 1:] - depth[:, :-1]).abs())
+        dscore[1:, :] = torch.maximum(dscore[1:, :], (depth[1:, :] - depth[:-1, :]).abs())
+        dscore[:-1, :] = torch.maximum(dscore[:-1, :], (depth[1:, :] - depth[:-1, :]).abs())
+        boundary = torch.maximum(boundary, _runtime_unit_score(dscore, valid_ids))
+    return boundary.clamp(0.0, 1.0)
 
 
 def _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, *, device, view=None, include_viewdir=False):
@@ -366,6 +458,24 @@ def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=No
             view_scales = view_scales.to(device=device, dtype=torch.float32).clamp_min(1e-6)
         residuals = base_coeffs
         triangle_count = int(base_coeffs.shape[0])
+    elif basis_type == "affine_barycentric_viewdir_pod_mixture":
+        base_coeffs = field["triangle_base_coefficients"].to(device=device, dtype=torch.float32)
+        expert_delta_coeffs = field["triangle_expert_delta_coefficients"].to(device=device, dtype=torch.float32)
+        expert_reliability = field["triangle_expert_reliability"].to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
+        expert_mse_scale = field.get("triangle_expert_descent_scale", field.get("triangle_expert_mse_scale", None))
+        if expert_mse_scale is not None:
+            expert_mse_scale = expert_mse_scale.to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
+        occlusion_base_keep = field["triangle_occlusion_base_keep"].to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
+        pod_base_keep_mode = str(field.get("pod_base_keep_mode", "occlusion_replace") or "occlusion_replace")
+        pod_view_gate_mode = str(field.get("pod_view_gate_mode", "implicit_unit_temperature") or "implicit_unit_temperature")
+        view_means = field.get("triangle_view_means", None)
+        view_scales = field.get("triangle_view_scales", None)
+        if view_means is not None:
+            view_means = view_means.to(device=device, dtype=torch.float32)
+        if view_scales is not None:
+            view_scales = view_scales.to(device=device, dtype=torch.float32).clamp_min(1e-6)
+        residuals = base_coeffs
+        triangle_count = int(base_coeffs.shape[0])
     elif basis_type in {"", "constant"}:
         residuals = field["triangle_residuals"].to(device=device, dtype=torch.float32)
         triangle_count = int(residuals.shape[0])
@@ -418,6 +528,43 @@ def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=No
                 view_gate = torch.exp(-0.5 * z2 / temperature).clamp(0.0, 1.0)
                 gate_values = gate_values * (0.5 + 0.5 * view_gate)
             values = base_values + gate_values[:, None] * delta_values
+        elif basis_type == "affine_barycentric_viewdir_pod_mixture":
+            pixel_yx = valid.nonzero(as_tuple=False)
+            basis = _surface_affine_basis(
+                flat_ids,
+                pixel_yx,
+                pkg,
+                triangles,
+                device=device,
+                view=view,
+                include_viewdir=True,
+            )
+            base_values = torch.einsum("nf,nfc->nc", basis, base_coeffs[flat_ids])
+            expert_values = torch.einsum("nf,nefc->nec", basis, expert_delta_coeffs[flat_ids])
+            detail_score = _runtime_detail_score(rendering)[valid].to(device=device, dtype=torch.float32)
+            boundary_score = _runtime_boundary_score(ids, pkg)[valid].to(device=device, dtype=torch.float32)
+            cues = torch.stack([detail_score * (1.0 - boundary_score), boundary_score], dim=1).clamp(0.0, 1.0)
+            rel = expert_reliability[flat_ids]
+            weights = (rel * cues).clamp(0.0, 1.0)
+            if expert_mse_scale is not None:
+                weights = weights * expert_mse_scale[flat_ids]
+            if view_means is not None and view_scales is not None:
+                viewdir = basis[:, 3:6]
+                z2 = ((viewdir - view_means[flat_ids]) / view_scales[flat_ids]).square().mean(dim=1)
+                if pod_view_gate_mode == "temperature_controlled":
+                    temperature = float(field.get("view_gate_temperature", 0.0) or 0.0)
+                    if temperature > 0.0:
+                        view_gate = torch.exp(-0.5 * z2 / temperature).clamp(0.0, 1.0)
+                        weights = weights * view_gate[:, None]
+                else:
+                    view_gate = torch.exp(-0.5 * z2).clamp(0.0, 1.0)
+                    weights = weights * view_gate[:, None]
+            mixture = weights / (1.0 + weights.sum(dim=1, keepdim=True)).clamp_min(1.0)
+            if pod_base_keep_mode == "base_preserving_boundary":
+                base_keep = torch.ones_like(boundary_score)
+            else:
+                base_keep = 1.0 - boundary_score * (1.0 - occlusion_base_keep[flat_ids])
+            values = base_keep[:, None] * base_values + (mixture[:, :, None] * expert_values).sum(dim=1)
         else:
             values = residuals[flat_ids]
         residual_clip = float(field.get("residual_clip", 0.0) or 0.0)
@@ -482,6 +629,9 @@ def _load_endpoint_runtime(
     surface_field_manifest = {}
     if surface_field_path is not None and surface_field_path.is_file():
         surface_field = _load_surface_residual_field(surface_field_path, report_path, endpoint_method)
+        surface_field_solve_stats = (
+            surface_field.get("solve_stats", {}) if isinstance(surface_field.get("solve_stats"), dict) else {}
+        )
         surface_field_manifest = {
             "field_path": str(surface_field_path),
             "field_sha256": _sha256(surface_field_path),
@@ -489,6 +639,30 @@ def _load_endpoint_runtime(
             "field_type": str(surface_field.get("field_type", "") or ""),
             "basis_type": str(surface_field.get("basis_type", "") or ""),
             "builder_variant": str(surface_field.get("builder_variant", "") or ""),
+            "method_version": str(surface_field.get("method_version", "") or ""),
+            "field_variant": str(surface_field.get("field_variant", "") or ""),
+            "expert_reliability_variant": str(
+                surface_field.get("expert_reliability_variant", "")
+                or surface_field_solve_stats.get("expert_reliability_variant", "")
+                or ""
+            ),
+            "pod_expert_reliability_variant": str(surface_field.get("pod_expert_reliability_variant", "") or ""),
+            "expert_reliability_combine": str(
+                surface_field.get("expert_reliability_combine", "")
+                or surface_field_solve_stats.get("expert_reliability_combine", "")
+                or ""
+            ),
+            "expert_mse_certificate": str(
+                surface_field.get("expert_mse_certificate", "")
+                or surface_field_solve_stats.get("expert_mse_certificate", "")
+                or ""
+            ),
+            "pod_crossfit_split": str(
+                surface_field.get("pod_crossfit_split", "") or surface_field_solve_stats.get("pod_crossfit_split", "") or ""
+            ),
+            "expert_names": list(surface_field.get("expert_names", []) or []),
+            "pod_base_keep_mode": str(surface_field.get("pod_base_keep_mode", "") or ""),
+            "pod_view_gate_mode": str(surface_field.get("pod_view_gate_mode", "") or ""),
             "triangle_count": int(surface_field.get("triangle_count", 0) or 0),
             "valid_triangles": int(surface_field.get("valid_triangles", 0) or 0),
             "render_min_count_valid_triangles": int(

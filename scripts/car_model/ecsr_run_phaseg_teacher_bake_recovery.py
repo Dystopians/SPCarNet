@@ -363,6 +363,8 @@ def _train_command(
         args.teacher_render_mask_mode,
         "--teacher_render_error_margin",
         str(args.teacher_render_error_margin),
+        "--teacher_render_parent_delta_min",
+        str(args.teacher_render_parent_delta_min),
         "--teacher_render_start_iter",
         str(args.load_iteration),
         "--teacher_render_warmup_iters",
@@ -667,6 +669,7 @@ def run_scene(args: argparse.Namespace, scene: str, phasef_rows: dict[str, dict[
             "teacher_render_lambda": float(args.teacher_render_lambda),
             "teacher_render_dssim": float(args.teacher_render_dssim),
             "teacher_render_mask_mode": args.teacher_render_mask_mode,
+            "teacher_render_parent_delta_min": float(args.teacher_render_parent_delta_min),
             "parent_render_rollback_lambda": float(args.parent_render_rollback_lambda),
             "parent_render_rollback_aggregation": args.parent_render_rollback_aggregation,
             "parent_render_rollback_error_space": args.parent_render_rollback_error_space,
@@ -803,6 +806,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--teacher_render_dssim", type=float, default=0.10)
     parser.add_argument("--teacher_render_mask_mode", default="teacher_better")
     parser.add_argument("--teacher_render_error_margin", type=float, default=0.0)
+    parser.add_argument("--teacher_render_parent_delta_min", type=float, default=0.0)
     parser.add_argument("--teacher_render_warmup_iters", type=int, default=50)
     parser.add_argument("--teacher_render_decay_start_iter", type=int, default=-1)
     parser.add_argument("--teacher_render_decay_end_iter", type=int, default=-1)

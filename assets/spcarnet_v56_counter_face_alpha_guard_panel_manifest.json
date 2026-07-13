@@ -1,0 +1,59 @@
+{
+  "output": "assets/spcarnet_v56_counter_face_alpha_guard_panel.png",
+  "v52_render_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/counter/renders",
+  "v55d_render_dir": "/dev/shm/peilincai_spcarnet_v55d_face_alpha_caphit_20260623/counter_v55d_policyval_face_alpha_l1pos09_support4096_tex32_nearest_region_texture_adapter/test/ours_26000_counter_v55d_policyval_face_alpha_l1pos09_support4096_tex32_nearest_region_texture_adapter/renders",
+  "gt_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/v52_capacity_aware_selected_full9/counter/gt",
+  "selection": "mechanical_top_crop_mse_reduction_v52_minus_v55d",
+  "crop": 220,
+  "stride": 110,
+  "rows": [
+    {
+      "view": "00000.png",
+      "x": 330,
+      "y": 440,
+      "crop": 220,
+      "score_mse_reduction": 6.88437357894145e-05,
+      "positive_fraction": 0.2256404958677686,
+      "crop_mse_v52": 0.016184210777282715,
+      "crop_mse_v55d": 0.01611536741256714,
+      "crop_mse_reduction": 6.88437357894145e-05,
+      "crop_positive_fraction": 0.2256404958677686
+    },
+    {
+      "view": "00007.png",
+      "x": 440,
+      "y": 220,
+      "crop": 220,
+      "score_mse_reduction": 6.647220288868994e-05,
+      "positive_fraction": 0.14735537190082645,
+      "crop_mse_v52": 0.005931834690272808,
+      "crop_mse_v55d": 0.005865362007170916,
+      "crop_mse_reduction": 6.647220288868994e-05,
+      "crop_positive_fraction": 0.14735537190082645
+    },
+    {
+      "view": "00007.png",
+      "x": 550,
+      "y": 110,
+      "crop": 220,
+      "score_mse_reduction": 4.4989683374296874e-05,
+      "positive_fraction": 0.10243801652892562,
+      "crop_mse_v52": 0.006713726092129946,
+      "crop_mse_v55d": 0.006668735761195421,
+      "crop_mse_reduction": 4.4989683374296874e-05,
+      "crop_positive_fraction": 0.10243801652892562
+    },
+    {
+      "view": "00000.png",
+      "x": 220,
+      "y": 550,
+      "crop": 220,
+      "score_mse_reduction": 4.2869178287219256e-05,
+      "positive_fraction": 0.19163223140495866,
+      "crop_mse_v52": 0.014514178037643433,
+      "crop_mse_v55d": 0.014471309259533882,
+      "crop_mse_reduction": 4.2869178287219256e-05,
+      "crop_positive_fraction": 0.19163223140495866
+    }
+  ]
+}

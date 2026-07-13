@@ -1,0 +1,75 @@
+{
+  "schema": "spcarnet_v191_phasej_flowers_qualitative_panel_v1",
+  "selection": "mechanical top views by strict per-view improvement plus local Phase-J-to-v191 absolute-error reduction",
+  "phasej_dir": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela",
+  "v190_dir": "/dev/shm/peilincai_spcarnet_v190_grad_unet/flowers_exact_target_apply/test/ours_26000_v190_grad_unet_flowers",
+  "v191_dir": "/dev/shm/peilincai_spcarnet_v191_lpips_grad_unet/flowers_exact_target_apply/test/ours_26000_v191_lpips_grad_unet_flowers",
+  "phasej_per_view": "/dev/shm/peilincai_spcarnet_v191_lpips_grad_unet/phasej_flowers_official_per_view_rerun.json",
+  "v191_per_view": "/dev/shm/peilincai_spcarnet_v191_lpips_grad_unet/v191_official_test_per_view.json",
+  "output": "assets/spcarnet_v191_phasej_flowers_qualitative_panel.png",
+  "rows": [
+    {
+      "view": "00001.png",
+      "crop": {
+        "x": 27,
+        "y": 10,
+        "w": 220,
+        "h": 180,
+        "score": 0.019852351397275925,
+        "local_phasej_psnr": 14.644395145189986,
+        "local_v191_psnr": 16.700010430909707,
+        "local_mae_phasej": 0.14218255877494812,
+        "local_mae_v191": 0.10679544508457184,
+        "local_positive_fraction": 0.6704545454545454
+      },
+      "per_view_delta_v191_minus_phasej": {
+        "dpsnr": 0.7842235565185547,
+        "dssim": 0.10118281841278076,
+        "dlpips_improvement": 0.061814963817596436,
+        "strict": true
+      }
+    },
+    {
+      "view": "00003.png",
+      "crop": {
+        "x": 326,
+        "y": 851,
+        "w": 220,
+        "h": 180,
+        "score": 0.021282020956277847,
+        "local_phasej_psnr": 10.471026766760879,
+        "local_v191_psnr": 12.365420056360204,
+        "local_mae_phasej": 0.21516650915145874,
+        "local_mae_v191": 0.17906352877616882,
+        "local_positive_fraction": 0.6432323232323233
+      },
+      "per_view_delta_v191_minus_phasej": {
+        "dpsnr": 0.953887939453125,
+        "dssim": 0.07503986358642578,
+        "dlpips_improvement": 0.06771895289421082,
+        "strict": true
+      }
+    },
+    {
+      "view": "00002.png",
+      "crop": {
+        "x": 130,
+        "y": 25,
+        "w": 220,
+        "h": 180,
+        "score": 0.0221065953373909,
+        "local_phasej_psnr": 13.109846010226251,
+        "local_v191_psnr": 14.789885449752473,
+        "local_mae_phasej": 0.12965664267539978,
+        "local_mae_v191": 0.1035466119647026,
+        "local_positive_fraction": 0.6138131313131313
+      },
+      "per_view_delta_v191_minus_phasej": {
+        "dpsnr": 0.7730770111083984,
+        "dssim": 0.0732811987400055,
+        "dlpips_improvement": 0.06390005350112915,
+        "strict": true
+      }
+    }
+  ]
+}

@@ -92,9 +92,11 @@ def main() -> int:
         queries_free=64,
         queries_hard=32,
         queries_mixed=32,
+        queries_band=16,
+        band_epsilon=0.02,
         queries_eikonal=0,
     )
-    loss_cfg = ShapeFieldLossConfig()
+    loss_cfg = ShapeFieldLossConfig(w_band=0.25)
 
     rng = np.random.default_rng(0)
     losses_seen: list[float] = []
@@ -106,10 +108,10 @@ def main() -> int:
             assemble_query_batch(item, cfg=train_cfg, rng=rng, field_kind="occupancy")
             for item in items
         ]
-        stacked = {
-            key: torch.stack([q[key] for q in per_object_queries], dim=0).to(device)
-            for key in ("surface", "free", "hard", "mixed_pts", "mixed_lab")
-        }
+        stacked = {}
+        for key in ("surface", "free", "hard", "mixed_pts", "mixed_lab", "band_inner", "band_outer"):
+            if key in per_object_queries[0]:
+                stacked[key] = torch.stack([q[key] for q in per_object_queries], dim=0).to(device)
         z = latents(torch.tensor([0, 1], dtype=torch.long, device=device))
         total, metrics = compute_losses(
             decoder, z, stacked, loss_cfg=loss_cfg, field_kind="occupancy"

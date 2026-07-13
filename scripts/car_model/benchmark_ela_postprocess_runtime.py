@@ -367,6 +367,7 @@ def _run_repeat(
     alpha: float,
     benefit_calibrator: BenefitCalibrator | None,
     alpha_calibrator: AlphaCalibrator | None,
+    evidence_max_side: int,
     device: torch.device,
 ) -> dict[str, Any]:
     import torch
@@ -409,6 +410,7 @@ def _run_repeat(
             local_trust_min_confidence=float(policy["local_trust_min_confidence"]),
             local_trust_mode=str(policy["local_trust_mode"]),
             local_trust_min_weight=float(policy["local_trust_min_weight"]),
+            evidence_max_side=int(evidence_max_side),
             loader=loader,
             device=device,
         )
@@ -462,6 +464,7 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- alpha: `{payload['alpha']}`",
         f"- k: `{payload['k']}`",
         f"- mode: `{payload['mode']}`",
+        f"- evidence max side: `{payload['evidence_max_side']}`",
         f"- depth rel tol: `{payload['depth_rel_tol']}`",
         f"- residual clip: `{payload['residual_clip']}`",
         f"- direction weight: `{payload['direction_weight']}`",
@@ -531,6 +534,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             alpha=alpha,
             benefit_calibrator=benefit_calibrator,
             alpha_calibrator=alpha_calibrator,
+            evidence_max_side=int(args.evidence_max_side),
             device=device,
         )
         for idx in range(max(1, int(args.repeats)))
@@ -592,6 +596,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "local_trust_min_confidence": float(policy["local_trust_min_confidence"]),
         "local_trust_mode": str(policy["local_trust_mode"]),
         "local_trust_min_weight": float(policy["local_trust_min_weight"]),
+        "evidence_max_side": int(args.evidence_max_side),
         "benefit_calibrator_loaded": benefit_calibrator is not None,
         "alpha_calibrator_loaded": alpha_calibrator is not None,
         "cpu_wall_time_sec_mean": _mean(wall),
@@ -621,6 +626,12 @@ def main() -> int:
     parser.add_argument("--ela_report", default="", help="Optional existing ela_report.json to reuse policy/alpha fields.")
     parser.add_argument("--max_views", type=int, default=1, help="0 means all target views. Default 1 is smoke-friendly.")
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument(
+        "--evidence_max_side",
+        type=int,
+        default=0,
+        help="Optional fast adapter path: compute evidence warps at this maximum side before upsampling.",
+    )
     parser.add_argument("--device", default="auto", help="auto, cpu, cuda, cuda:0, etc.")
     parser.add_argument("--out_json", default="ela_postprocess_runtime_profile.json")
     parser.add_argument("--out_md", default="ela_postprocess_runtime_profile.md")
@@ -630,6 +641,8 @@ def main() -> int:
         parser.error("--max_views must be >= 0")
     if int(args.repeats) < 1:
         parser.error("--repeats must be >= 1")
+    if int(args.evidence_max_side) < 0:
+        parser.error("--evidence_max_side must be >= 0")
 
     payload = build_payload(args)
 

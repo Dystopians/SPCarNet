@@ -56,6 +56,7 @@ class ShapeFieldLossConfig:
     w_free: float = 1.0
     w_hard: float = 0.5
     w_mixed: float = 0.5
+    w_band: float = 0.0
     w_zL2: float = 1e-4
     w_eik: float = 0.1
     w_normal: float = 0.0
@@ -80,6 +81,8 @@ class ShapeFieldTrainConfig:
     queries_free: int = 384
     queries_hard: int = 128
     queries_mixed: int = 128
+    queries_band: int = 0
+    band_epsilon: float = 0.02
     queries_eikonal: int = 256
 
     lr_decoder: float = 5e-4
@@ -192,6 +195,19 @@ def assemble_query_batch(
         "mixed_pts": torch.from_numpy(np.asarray(mixed_pts, dtype=np.float32)),
         "mixed_lab": torch.from_numpy(mixed_lab),
     }
+    clean_normals = item.get("clean_normals_object")
+    if cfg.queries_band > 0 and clean_normals is not None:
+        clean_points = np.asarray(item["clean_points_object"], dtype=np.float32)
+        normals = np.asarray(clean_normals, dtype=np.float32)
+        n = min(clean_points.shape[0], normals.shape[0])
+        if n > 0:
+            idx = rng.choice(n, size=int(cfg.queries_band), replace=n < int(cfg.queries_band))
+            pts = clean_points[idx]
+            nrms = normals[idx]
+            nrms = nrms / np.maximum(np.linalg.norm(nrms, axis=1, keepdims=True), 1e-8)
+            eps = float(cfg.band_epsilon)
+            out["band_inner"] = torch.from_numpy(np.asarray(pts - eps * nrms, dtype=np.float32))
+            out["band_outer"] = torch.from_numpy(np.asarray(pts + eps * nrms, dtype=np.float32))
     if field_kind == "sdf" and cfg.queries_eikonal > 0:
         eik = (rng.random((cfg.queries_eikonal, 3)) * 2.0 - 1.0).astype(np.float32)
         out["eikonal"] = torch.from_numpy(eik)
@@ -250,6 +266,16 @@ def compute_losses(
             + loss_cfg.w_hard * l_hard
             + loss_cfg.w_mixed * l_mixed
         )
+        if loss_cfg.w_band > 0 and "band_inner" in queries and "band_outer" in queries:
+            band_inner_logits = decoder(queries["band_inner"], z_batch)
+            band_outer_logits = decoder(queries["band_outer"], z_batch)
+            l_band_inner = _bce(band_inner_logits, 1.0)
+            l_band_outer = _bce(band_outer_logits, 0.0)
+            l_band = 0.5 * (l_band_inner + l_band_outer)
+            total = total + loss_cfg.w_band * l_band
+            metrics["loss_band"] = float(l_band.detach().item())
+            metrics["loss_band_inner"] = float(l_band_inner.detach().item())
+            metrics["loss_band_outer"] = float(l_band_outer.detach().item())
         metrics["loss_surf"] = float(l_surf.detach().item())
         metrics["loss_free"] = float(l_free.detach().item())
         metrics["loss_hard"] = float(l_hard.detach().item())
@@ -415,7 +441,16 @@ class ShapeFieldAutoDecoderTrainer:
             for it in items
         ]
         stacked: dict[str, torch.Tensor] = {}
-        for key in ("surface", "free", "hard", "mixed_pts", "mixed_lab", "eikonal"):
+        for key in (
+            "surface",
+            "free",
+            "hard",
+            "mixed_pts",
+            "mixed_lab",
+            "band_inner",
+            "band_outer",
+            "eikonal",
+        ):
             if key not in per_object_queries[0]:
                 continue
             stacked[key] = torch.stack([q[key] for q in per_object_queries], dim=0).to(self.device, non_blocking=True)

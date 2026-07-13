@@ -216,6 +216,8 @@ def write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
 
 
 def write_sparse_depth_sentinel_cache(*, output: Path, cache: Mapping[str, Any], cfg: SentinelCacheConfig) -> None:
+    if output.suffix != ".npz":
+        raise ValueError(f"sparse depth sentinel cache output must end with .npz: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
     arrays = dict(cache["arrays"])
     manifest = dict(cache["manifest"])

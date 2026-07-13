@@ -232,6 +232,7 @@ class OptimizationParams(ParamGroup):
         self.teacher_render_dssim = 0.2
         self.teacher_render_mask_mode = "none"
         self.teacher_render_error_margin = 0.0
+        self.teacher_render_parent_delta_min = 0.0
         self.teacher_render_start_iter = 0
         self.teacher_render_warmup_iters = 1000
         self.teacher_render_decay_start_iter = -1

@@ -973,8 +973,18 @@ def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Names
                 f"--alpha_view_tail_min_gain={float(args.ela_alpha_view_tail_min_gain)}",
                 "--alpha_view_tail_max_negative_fraction",
                 str(float(args.ela_alpha_view_tail_max_negative_fraction)),
+                "--alpha_view_tail_objective",
+                str(args.ela_alpha_view_tail_objective),
+                "--alpha_view_tail_ssim_weight",
+                str(float(args.ela_alpha_view_tail_ssim_weight)),
+                "--alpha_view_tail_lpips_weight",
+                str(float(args.ela_alpha_view_tail_lpips_weight)),
+                "--alpha_view_tail_metric_max_side",
+                str(int(args.ela_alpha_view_tail_metric_max_side)),
             ]
         )
+        if bool(args.ela_alpha_view_tail_compute_lpips):
+            out.append("--alpha_view_tail_compute_lpips")
     else:
         if _ela_view_tail_requested(args):
             raise ValueError(
@@ -1121,8 +1131,18 @@ def _apply_ela(
                 f"--alpha_view_tail_min_gain={float(args.ela_alpha_view_tail_min_gain)}",
                 "--alpha_view_tail_max_negative_fraction",
                 str(float(args.ela_alpha_view_tail_max_negative_fraction)),
+                "--alpha_view_tail_objective",
+                str(args.ela_alpha_view_tail_objective),
+                "--alpha_view_tail_ssim_weight",
+                str(float(args.ela_alpha_view_tail_ssim_weight)),
+                "--alpha_view_tail_lpips_weight",
+                str(float(args.ela_alpha_view_tail_lpips_weight)),
+                "--alpha_view_tail_metric_max_side",
+                str(int(args.ela_alpha_view_tail_metric_max_side)),
             ]
         )
+        if bool(args.ela_alpha_view_tail_compute_lpips):
+            cmd.append("--alpha_view_tail_compute_lpips")
         if bool(args.ela_edge_gate):
             cmd.extend(["--edge_gate", "--edge_gate_min", str(args.ela_edge_gate_min)])
         if bool(args.ela_calib_lpips):
@@ -2074,6 +2094,11 @@ def main() -> int:
     parser.add_argument("--ela_alpha_view_tail_cvar_fraction", type=float, default=0.25)
     parser.add_argument("--ela_alpha_view_tail_min_gain", type=float, default=-math.inf)
     parser.add_argument("--ela_alpha_view_tail_max_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_view_tail_objective", choices=("mse", "balanced"), default="mse")
+    parser.add_argument("--ela_alpha_view_tail_ssim_weight", type=float, default=20.0)
+    parser.add_argument("--ela_alpha_view_tail_lpips_weight", type=float, default=20.0)
+    parser.add_argument("--ela_alpha_view_tail_compute_lpips", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_view_tail_metric_max_side", type=int, default=512)
     parser.add_argument("--ela_alpha_region_risk_enable", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--ela_alpha_region_risk_json", default="")
     parser.add_argument("--ela_alpha_region_risk_objective_bad_only", action=argparse.BooleanOptionalAction, default=False)

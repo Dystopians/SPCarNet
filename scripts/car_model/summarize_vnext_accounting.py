@@ -17,6 +17,35 @@ MANIFEST_SUFFIX = "_vnext_certified_residual_texture_manifest.json"
 TOPOLOGY_NAME = "topology_audit.json"
 COMPACTION_NAME = "compaction_summary.csv"
 
+VIEW_CONFIDENCE_PROFILE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("audit.view_confidence_profile", ("view_confidence_profile",)),
+    ("audit.view_consistency_confidence_profile", ("view_consistency_confidence_profile",)),
+    ("audit.policy_val_view_consistency_confidence", ("policy_val_view_consistency_confidence",)),
+    ("policy_val.view_confidence_profile", ("policy_val", "view_confidence_profile")),
+    ("policy_val.view_confidence", ("policy_val", "view_confidence")),
+    ("policy_val.view_consistency_confidence", ("policy_val", "view_consistency_confidence")),
+    ("policy_val_risk_gate.view_confidence_profile", ("policy_val_risk_gate", "view_confidence_profile")),
+    ("policy_val_risk_gate.view_confidence", ("policy_val_risk_gate", "view_confidence")),
+    (
+        "policy_val_risk_gate.view_consistency_confidence",
+        ("policy_val_risk_gate", "view_consistency_confidence"),
+    ),
+    ("fit_summary.view_confidence_profile", ("fit_summary", "view_confidence_profile")),
+    ("fit_summary.view_confidence", ("fit_summary", "view_confidence")),
+    ("fit_summary.view_consistency_confidence", ("fit_summary", "view_consistency_confidence")),
+)
+
+VIEW_CONFIDENCE_SUMMARY_PATHS: tuple[tuple[str, ...], ...] = (
+    ("view_confidence_profile_summary",),
+    ("view_consistency_confidence_profile_summary",),
+    ("policy_val", "view_confidence_profile_summary"),
+    ("policy_val", "view_consistency_confidence_profile_summary"),
+    ("policy_val_risk_gate", "view_confidence_profile_summary"),
+    ("policy_val_risk_gate", "view_consistency_confidence_profile_summary"),
+    ("fit_summary", "view_confidence_profile_summary"),
+    ("fit_summary", "view_consistency_confidence_profile_summary"),
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -62,6 +91,50 @@ def first(*values: Any) -> Any:
             continue
         return value
     return None
+
+
+def find_view_confidence_profile(audit: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
+    for label, path in VIEW_CONFIDENCE_PROFILE_PATHS:
+        value = get(audit, *path)
+        if isinstance(value, dict):
+            return label, value
+    return None, {}
+
+
+def view_confidence_enabled(
+    manifest: dict[str, Any],
+    audit: dict[str, Any],
+    profile: dict[str, Any],
+) -> Any:
+    return first(
+        get(audit, "policy_val_risk_gate", "enable_policy_val_view_consistency_confidence"),
+        get(audit, "policy_val_risk_gate", "view_confidence_enabled"),
+        get(audit, "settings", "enable_policy_val_view_consistency_confidence"),
+        get(manifest, "settings", "enable_policy_val_view_consistency_confidence"),
+        audit.get("enable_policy_val_view_consistency_confidence"),
+        audit.get("view_confidence_enabled"),
+        profile.get("enabled") if profile else None,
+        profile.get("requested") if profile else None,
+    )
+
+
+def view_confidence_profile_summary_keys(
+    audit: dict[str, Any],
+    profile: dict[str, Any],
+) -> list[str]:
+    summaries: list[dict[str, Any]] = []
+    for path in VIEW_CONFIDENCE_SUMMARY_PATHS:
+        value = get(audit, *path)
+        if isinstance(value, dict):
+            summaries.append(value)
+    if profile:
+        for key in ("profile_summary", "summary", "selected_profile", "best_profile", "global_best_profile"):
+            value = profile.get(key)
+            if isinstance(value, dict):
+                summaries.append(value)
+        if not summaries:
+            summaries.append(profile)
+    return sorted({str(key) for summary in summaries for key in summary.keys()})
 
 
 def rel(path: Path | str | None) -> str:
@@ -154,6 +227,7 @@ def build_row(root: Path, paths: dict[str, Path]) -> dict[str, Any]:
     topology = read_json(paths.get("topology", Path()))
     compaction = read_compaction_csv(paths.get("compaction", Path()))
     bins, rgb_params, rgb_bytes = estimate_texture_bytes(audit)
+    view_confidence_profile_path, view_confidence_profile = find_view_confidence_profile(audit)
     row = {
         "scene": first(manifest.get("scene"), get(audit, "settings", "scene"), root.name),
         "method": first(manifest.get("method"), get(manifest, "settings", "method_name"), get(audit, "settings", "method_name")),
@@ -163,6 +237,9 @@ def build_row(root: Path, paths: dict[str, Path]) -> dict[str, Any]:
         "protocol_passed": get(manifest, "protocol_audit", "passed"),
         "accepted": audit.get("accepted"),
         "effective_policy": audit.get("effective_policy"),
+        "view_confidence_enabled": view_confidence_enabled(manifest, audit, view_confidence_profile),
+        "view_confidence_profile_path": view_confidence_profile_path,
+        "view_confidence_profile_summary_keys": view_confidence_profile_summary_keys(audit, view_confidence_profile),
         "fallback_written": audit.get("fallback_written"),
         "selected_alpha": first(audit.get("selected_alpha"), get(audit, "fit_summary", "selected_alpha")),
         "selected_texture_size": first(get(audit, "fit_summary", "selected_texture_size"), get(audit, "fit_summary", "texture_size"), audit.get("selected_texture_size")),
@@ -197,9 +274,15 @@ def md(value: Any) -> str:
     return ("" if value is None else str(value)).replace("\n", " ").replace("|", "\\|")
 
 
+def keys_cell(value: Any) -> str:
+    if not isinstance(value, list):
+        return md(value)
+    return md(", ".join(str(item) for item in value))
+
+
 def print_markdown(rows: list[dict[str, Any]]) -> None:
-    print("| scene | method | status | protocol | accepted | policy | alpha | tex | atlas faces | changed frac | est tex MB | tri reduction | apply sec | eval sec |")
-    print("|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    print("| scene | method | status | protocol | accepted | policy | view conf | view conf summary keys | alpha | tex | atlas faces | changed frac | est tex MB | tri reduction | apply sec | eval sec |")
+    print("|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in sorted(rows, key=lambda item: (str(item.get("scene") or ""), str(item.get("method") or ""), str(item.get("artifact_root") or ""))):
         est_mb = fnum(row.get("estimated_residual_rgb_bytes_float32"))
         tri_reduction = fnum(row.get("removed_fraction"))
@@ -213,6 +296,8 @@ def print_markdown(rows: list[dict[str, Any]]) -> None:
                     bool_cell(row.get("protocol_passed")),
                     bool_cell(row.get("accepted")),
                     md(row.get("effective_policy")),
+                    bool_cell(row.get("view_confidence_enabled")),
+                    keys_cell(row.get("view_confidence_profile_summary_keys")),
                     fmt(row.get("selected_alpha")),
                     fmt(row.get("selected_texture_size"), 0),
                     fmt(row.get("atlas_faces"), 0),
@@ -233,6 +318,17 @@ def print_markdown(rows: list[dict[str, Any]]) -> None:
         changed_values = [value for value in changed_values if value is not None]
         texture_bytes = [fnum(row.get("estimated_residual_rgb_bytes_float32")) for row in rows]
         texture_bytes = [value for value in texture_bytes if value is not None]
+        view_confidence_known = [
+            row for row in rows if row.get("view_confidence_enabled") is True or row.get("view_confidence_enabled") is False
+        ]
+        view_confidence_enabled_count = sum(1 for row in view_confidence_known if row.get("view_confidence_enabled") is True)
+        view_confidence_summary_keys = sorted(
+            {
+                str(key)
+                for row in rows
+                for key in row.get("view_confidence_profile_summary_keys", [])
+            }
+        )
         print()
         print("## Aggregate")
         print()
@@ -240,6 +336,10 @@ def print_markdown(rows: list[dict[str, Any]]) -> None:
         print(f"- protocol pass: `{protocol}/{len(rows)}`")
         print(f"- accepted nonzero/policy accepted: `{accepted}/{len(rows)}`")
         print(f"- fallback or rejected: `{fallback}/{len(rows)}`")
+        if view_confidence_known:
+            print(f"- view confidence enabled: `{view_confidence_enabled_count}/{len(view_confidence_known)}`")
+        if view_confidence_summary_keys:
+            print(f"- view confidence profile summary keys: `{', '.join(view_confidence_summary_keys)}`")
         if changed_values:
             print(f"- mean changed fraction: `{sum(changed_values) / len(changed_values):.9f}`")
         if texture_bytes:

@@ -355,8 +355,18 @@ LOWRANK_VIEW_HOLDOUT_ERROR_CONF_INDEX = LOWRANK_VIEW_HOLDOUT_COSINE_INDEX + 1
 LOWRANK_VIEW_HOLDOUT_SUPPORT_BALANCE_INDEX = LOWRANK_VIEW_HOLDOUT_ERROR_CONF_INDEX + 1
 LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX = LOWRANK_VIEW_HOLDOUT_SUPPORT_BALANCE_INDEX + 1
 SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM = LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX + 1
-LOWRANK_TEXTURE_MODES = {"lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"}
-LOWRANK_VIEW_TEXTURE_MODES = {"lowrank_view_v2", "lowrank_view_holdout_v3"}
+VIEWBANK_ANCHOR_COUNT = 4
+VIEWBANK_ANCHOR_OFFSET = SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM
+VIEWBANK_ANCHOR_STRIDE = 9
+VIEWBANK_ANCHOR_RESIDUAL_OFFSET = 0
+VIEWBANK_ANCHOR_CAMERA_OFFSET = 3
+VIEWBANK_ANCHOR_SUPPORT_INDEX = 6
+VIEWBANK_ANCHOR_TARGET_COS_INDEX = 7
+VIEWBANK_ANCHOR_RELIABILITY_INDEX = 8
+SURFACE_TEXTURE_VIEWBANK_V1_DIM = VIEWBANK_ANCHOR_OFFSET + VIEWBANK_ANCHOR_COUNT * VIEWBANK_ANCHOR_STRIDE
+LOWRANK_TEXTURE_MODES = {"lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3", "viewbank_v1"}
+LOWRANK_VIEW_TEXTURE_MODES = {"lowrank_view_v2", "lowrank_view_holdout_v3", "viewbank_v1"}
+LOWRANK_HOLDOUT_TEXTURE_MODES = {"lowrank_view_holdout_v3", "viewbank_v1"}
 
 
 def _base_feature_dim(feature_mode: str) -> int:
@@ -648,6 +658,17 @@ def _lookup_surface_texture_rows(
             -1.0,
             1.0,
         ).astype(np.float32)
+        if mode == "viewbank_v1" and rows.shape[1] >= SURFACE_TEXTURE_VIEWBANK_V1_DIM:
+            for anchor_idx in range(VIEWBANK_ANCHOR_COUNT):
+                anchor_start = VIEWBANK_ANCHOR_OFFSET + anchor_idx * VIEWBANK_ANCHOR_STRIDE
+                anchor_camera = rows[:, anchor_start + VIEWBANK_ANCHOR_CAMERA_OFFSET:anchor_start + VIEWBANK_ANCHOR_CAMERA_OFFSET + 3]
+                anchor_camera = anchor_camera / np.maximum(np.linalg.norm(anchor_camera, axis=1, keepdims=True), 1.0e-8)
+                anchor_cos = np.sum(anchor_camera * target_camera.reshape(1, 3), axis=1)
+                rows[:, anchor_start + VIEWBANK_ANCHOR_TARGET_COS_INDEX] = np.clip(
+                    np.nan_to_num(anchor_cos, nan=0.0, posinf=1.0, neginf=-1.0),
+                    -1.0,
+                    1.0,
+                ).astype(np.float32)
     return rows.astype(np.float32)
 
 
@@ -921,9 +942,11 @@ def _fit_surface_feature_texture(
     rng = np.random.default_rng(int(seed))
     bins = max(1, int(uv_bins))
     mode = str(mode)
-    if mode not in {"v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"}:
+    if mode not in {"v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3", "viewbank_v1"}:
         raise ValueError(f"unknown surface texture mode={mode}")
-    if mode == "lowrank_view_holdout_v3":
+    if mode == "viewbank_v1":
+        feature_dim = SURFACE_TEXTURE_VIEWBANK_V1_DIM
+    elif mode == "lowrank_view_holdout_v3":
         feature_dim = SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM
     elif mode == "lowrank_view_v2":
         feature_dim = SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM
@@ -954,6 +977,10 @@ def _fit_surface_feature_texture(
     face_camera_sum = np.zeros((face_count, 3), dtype=np.float64)
     face_split_residual_sum = np.zeros((2, face_count, 3), dtype=np.float64)
     face_split_counts = np.zeros((2, face_count), dtype=np.float64)
+    viewbank_residual = np.zeros((total_bins, VIEWBANK_ANCHOR_COUNT, 3), dtype=np.float32)
+    viewbank_camera = np.zeros((total_bins, VIEWBANK_ANCHOR_COUNT, 3), dtype=np.float32)
+    viewbank_counts = np.zeros((total_bins, VIEWBANK_ANCHOR_COUNT), dtype=np.float32)
+    viewbank_scores = np.zeros((total_bins, VIEWBANK_ANCHOR_COUNT), dtype=np.float32)
     face_counts = np.zeros((face_count,), dtype=np.int64)
     rows: list[dict[str, Any]] = []
     sampled_pixels = 0
@@ -1076,6 +1103,23 @@ def _fit_surface_feature_texture(
         for channel in range(stat_dim):
             bin_sum[:, channel] += np.bincount(flat_ids, weights=values[:, channel], minlength=total_bins)
             face_sum[:, channel] += np.bincount(face_idx, weights=values[:, channel], minlength=face_count)
+        if mode == "viewbank_v1" and flat_ids.size:
+            unique_ids, inv = np.unique(flat_ids, return_inverse=True)
+            view_res_sum = np.zeros((int(unique_ids.size), 3), dtype=np.float64)
+            np.add.at(view_res_sum, inv, res.astype(np.float64))
+            view_counts = np.bincount(inv, minlength=int(unique_ids.size)).astype(np.float64)
+            view_mean = view_res_sum / np.maximum(view_counts[:, None], 1.0)
+            view_scores = np.linalg.norm(view_mean, axis=1) * np.sqrt(np.maximum(view_counts, 1.0))
+            for uid, mean_rgb, count, score in zip(unique_ids, view_mean, view_counts, view_scores, strict=False):
+                if float(score) <= 0.0:
+                    continue
+                slot = int(np.argmin(viewbank_scores[int(uid)]))
+                if float(score) <= float(viewbank_scores[int(uid), slot]):
+                    continue
+                viewbank_scores[int(uid), slot] = float(score)
+                viewbank_counts[int(uid), slot] = float(count)
+                viewbank_residual[int(uid), slot] = np.clip(mean_rgb, -1.0, 1.0).astype(np.float32)
+                viewbank_camera[int(uid), slot] = camera.astype(np.float32)
         rows.append({"view": path.stem, "sampled": int(ys.size), "used": int(flat_ids.size)})
 
     features = np.zeros((total_bins, feature_dim), dtype=np.float32)
@@ -1209,7 +1253,7 @@ def _fit_surface_feature_texture(
                     0.0,
                     1.0,
                 ).astype(np.float32)
-            if mode == "lowrank_view_holdout_v3":
+            if mode in LOWRANK_HOLDOUT_TEXTURE_MODES:
                 holdout = _split_holdout_direction_features(
                     bin_split_residual_sum[:, bin_nonzero],
                     bin_split_counts[:, bin_nonzero],
@@ -1218,7 +1262,42 @@ def _fit_surface_feature_texture(
                     nonzero_ids,
                     LOWRANK_VIEW_HOLDOUT_COSINE_INDEX:SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM,
                 ] = holdout
+        if mode == "viewbank_v1" and total_bins > 0:
+            order = np.argsort(viewbank_scores, axis=1)[:, ::-1]
+            sorted_scores = np.take_along_axis(viewbank_scores, order, axis=1)
+            sorted_counts = np.take_along_axis(viewbank_counts, order, axis=1)
+            sorted_residual = np.take_along_axis(viewbank_residual, order[:, :, None], axis=1)
+            sorted_camera = np.take_along_axis(viewbank_camera, order[:, :, None], axis=1)
+            max_count = max(float(np.max(sorted_counts)), 1.0)
+            max_score = max(float(np.max(sorted_scores)), 1.0e-6)
+            for anchor_idx in range(VIEWBANK_ANCHOR_COUNT):
+                anchor_start = VIEWBANK_ANCHOR_OFFSET + anchor_idx * VIEWBANK_ANCHOR_STRIDE
+                features[:, anchor_start + VIEWBANK_ANCHOR_RESIDUAL_OFFSET:anchor_start + VIEWBANK_ANCHOR_RESIDUAL_OFFSET + 3] = (
+                    sorted_residual[:, anchor_idx, :]
+                )
+                features[:, anchor_start + VIEWBANK_ANCHOR_CAMERA_OFFSET:anchor_start + VIEWBANK_ANCHOR_CAMERA_OFFSET + 3] = (
+                    sorted_camera[:, anchor_idx, :]
+                )
+                features[:, anchor_start + VIEWBANK_ANCHOR_SUPPORT_INDEX] = (
+                    np.log1p(sorted_counts[:, anchor_idx]) / max(float(np.log1p(max_count)), 1.0e-6)
+                ).astype(np.float32)
+                features[:, anchor_start + VIEWBANK_ANCHOR_RELIABILITY_INDEX] = np.clip(
+                    sorted_scores[:, anchor_idx] / max_score,
+                    0.0,
+                    1.0,
+                ).astype(np.float32)
     features = np.clip(np.nan_to_num(features, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
+    viewbank_reliability_on_covered = None
+    if mode == "viewbank_v1" and np.any(bin_nonzero):
+        covered_rows = np.nonzero(bin_nonzero)[0]
+        reliability_cols = np.asarray(
+            [
+                VIEWBANK_ANCHOR_OFFSET + anchor_idx * VIEWBANK_ANCHOR_STRIDE + VIEWBANK_ANCHOR_RELIABILITY_INDEX
+                for anchor_idx in range(VIEWBANK_ANCHOR_COUNT)
+            ],
+            dtype=np.int64,
+        )
+        viewbank_reliability_on_covered = features[np.ix_(covered_rows, reliability_cols)]
     summary = {
         "enabled": True,
         "mode": mode,
@@ -1281,7 +1360,18 @@ def _fit_surface_feature_texture(
         ),
         "mean_holdout_confidence_on_covered": (
             float(np.mean(features[bin_nonzero, LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX]))
-            if mode == "lowrank_view_holdout_v3" and np.any(bin_nonzero)
+            if mode in LOWRANK_HOLDOUT_TEXTURE_MODES and np.any(bin_nonzero)
+            else None
+        ),
+        "viewbank_anchor_count": int(VIEWBANK_ANCHOR_COUNT) if mode == "viewbank_v1" else 0,
+        "mean_viewbank_nonempty_anchors_on_covered": (
+            float(np.mean(np.count_nonzero(viewbank_reliability_on_covered > 0.0, axis=1)))
+            if viewbank_reliability_on_covered is not None
+            else None
+        ),
+        "mean_viewbank_anchor_reliability_on_covered": (
+            float(np.mean(viewbank_reliability_on_covered))
+            if viewbank_reliability_on_covered is not None
             else None
         ),
         "rows": rows,
@@ -1322,6 +1412,10 @@ class SurfaceResidualDecoder(torch.nn.Module):
         texture_anchor_reliability_power: float = 1.0,
         texture_anchor_floor: float = 0.0,
         texture_anchor_use_holdout_confidence: bool = False,
+        viewbank_feature_offset: int = -1,
+        viewbank_anchor_count: int = 0,
+        viewbank_cosine_bias_scale: float = 2.0,
+        viewbank_direct_scale: float = 0.15,
         texture_latent_count: int = 0,
         texture_latent_dim: int = 0,
         texture_latent_init_std: float = 0.02,
@@ -1352,9 +1446,17 @@ class SurfaceResidualDecoder(torch.nn.Module):
         self.texture_anchor_reliability_power = max(0.0, float(texture_anchor_reliability_power))
         self.texture_anchor_floor = float(np.clip(float(texture_anchor_floor), 0.0, 1.0))
         self.texture_anchor_use_holdout_confidence = bool(texture_anchor_use_holdout_confidence)
-        if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
+        self.viewbank_feature_offset = int(viewbank_feature_offset)
+        self.viewbank_anchor_count = max(0, int(viewbank_anchor_count))
+        self.viewbank_cosine_bias_scale = float(viewbank_cosine_bias_scale)
+        self.viewbank_direct_scale = float(viewbank_direct_scale)
+        if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe", "viewbank_transport"}:
             raise ValueError(f"unknown decoder output mode={self.output_mode}")
-        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
+        if self.output_mode == "viewbank_transport":
+            if self.viewbank_feature_offset < 0 or self.viewbank_anchor_count <= 0:
+                raise ValueError("viewbank_transport output requires a positive viewbank feature offset and anchor count")
+            residual_out_dim = self.viewbank_anchor_count + 3
+        elif self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             if self.lowrank_basis_count <= 0 or self.lowrank_basis_feature_offset < 0:
                 raise ValueError(f"{self.output_mode} output requires positive basis count and feature offset")
             if self.output_mode == "lowrank_plus_direct":
@@ -1388,7 +1490,34 @@ class SurfaceResidualDecoder(torch.nn.Module):
             texture_bin_idx = torch.clamp(texture_bin_idx.long(), 0, self.texture_latent_count - 1)
             inputs.append(torch.tanh(self.texture_embedding(texture_bin_idx)))
         raw = self.net(torch.cat(inputs, dim=1))
-        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
+        if self.output_mode == "viewbank_transport":
+            anchor_residuals = []
+            anchor_cosines = []
+            anchor_reliability = []
+            for anchor_idx in range(int(self.viewbank_anchor_count)):
+                anchor_start = int(self.viewbank_feature_offset) + anchor_idx * VIEWBANK_ANCHOR_STRIDE
+                anchor_residuals.append(
+                    features[
+                        :,
+                        anchor_start + VIEWBANK_ANCHOR_RESIDUAL_OFFSET:anchor_start + VIEWBANK_ANCHOR_RESIDUAL_OFFSET + 3,
+                    ]
+                )
+                anchor_cosines.append(features[:, anchor_start + VIEWBANK_ANCHOR_TARGET_COS_INDEX])
+                anchor_reliability.append(features[:, anchor_start + VIEWBANK_ANCHOR_RELIABILITY_INDEX])
+            anchors = torch.stack(anchor_residuals, dim=1)
+            target_cos = torch.stack(anchor_cosines, dim=1)
+            reliability = torch.stack(anchor_reliability, dim=1)
+            logits = raw[:, : int(self.viewbank_anchor_count)]
+            logits = logits + float(self.viewbank_cosine_bias_scale) * target_cos
+            logits = logits + torch.log(torch.clamp(reliability, min=1.0e-4))
+            weights = torch.softmax(logits, dim=1)
+            residual = torch.sum(weights[:, :, None] * anchors, dim=1)
+            direct_start = int(self.viewbank_anchor_count)
+            direct_end = direct_start + 3
+            direct = torch.tanh(raw[:, direct_start:direct_end]) * self.max_delta * self.viewbank_direct_scale
+            residual = torch.clamp(residual + direct, -self.max_delta, self.max_delta)
+            confidence_index = int(self.viewbank_anchor_count) + 3
+        elif self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             coeff = torch.tanh(raw[:, : self.lowrank_basis_count]) * self.lowrank_coeff_scale
             basis_start = int(self.lowrank_basis_feature_offset)
             basis_end = basis_start + 3 * int(self.lowrank_basis_count)
@@ -3016,20 +3145,22 @@ def main() -> int:
     parser.add_argument("--feature_mode", choices=["basic", "fourier_v1"], default="basic")
     parser.add_argument(
         "--surface_texture_mode",
-        choices=["none", "v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"],
+        choices=["none", "v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3", "viewbank_v1"],
         default="none",
     )
     parser.add_argument("--surface_texture_uv_bins", type=int, default=4)
     parser.add_argument("--surface_texture_max_samples_per_view", type=int, default=250000)
     parser.add_argument(
         "--decoder_output_mode",
-        choices=["direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe"],
+        choices=["direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe", "viewbank_transport"],
         default="direct",
     )
     parser.add_argument("--lowrank_coeff_scale", type=float, default=1.0)
     parser.add_argument("--lowrank_direct_scale", type=float, default=0.25)
     parser.add_argument("--moe_expert_count", type=int, default=3)
     parser.add_argument("--moe_direct_scale", type=float, default=0.35)
+    parser.add_argument("--viewbank_cosine_bias_scale", type=float, default=2.0)
+    parser.add_argument("--viewbank_direct_scale", type=float, default=0.15)
     parser.add_argument(
         "--texture_anchor_scale",
         type=float,
@@ -3311,7 +3442,11 @@ def main() -> int:
         args.surface_texture_mode
     ) not in LOWRANK_TEXTURE_MODES:
         raise ValueError(
-            f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1, lowrank_view_v2, or lowrank_view_holdout_v3"
+            f"--decoder_output_mode {args.decoder_output_mode} requires a lowrank-capable --surface_texture_mode"
+        )
+    if str(args.decoder_output_mode) == "viewbank_transport" and str(args.surface_texture_mode) != "viewbank_v1":
+        raise ValueError(
+            "--decoder_output_mode viewbank_transport requires --surface_texture_mode viewbank_v1"
         )
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
     texture_latent_count = (
@@ -3328,6 +3463,11 @@ def main() -> int:
     lowrank_basis_feature_offset = (
         _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
         if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
+        else -1
+    )
+    viewbank_feature_offset = (
+        _base_feature_dim(str(args.feature_mode)) + VIEWBANK_ANCHOR_OFFSET
+        if str(args.decoder_output_mode) == "viewbank_transport"
         else -1
     )
     model = SurfaceResidualDecoder(
@@ -3354,6 +3494,10 @@ def main() -> int:
         texture_anchor_reliability_power=float(args.texture_anchor_reliability_power),
         texture_anchor_floor=float(args.texture_anchor_floor),
         texture_anchor_use_holdout_confidence=bool(args.texture_anchor_use_holdout_confidence),
+        viewbank_feature_offset=int(viewbank_feature_offset),
+        viewbank_anchor_count=VIEWBANK_ANCHOR_COUNT if str(args.decoder_output_mode) == "viewbank_transport" else 0,
+        viewbank_cosine_bias_scale=float(args.viewbank_cosine_bias_scale),
+        viewbank_direct_scale=float(args.viewbank_direct_scale),
         texture_latent_count=int(texture_latent_count),
         texture_latent_dim=int(args.texture_latent_dim),
         texture_latent_init_std=float(args.texture_latent_init_std),
@@ -3883,6 +4027,10 @@ def main() -> int:
             "lowrank_direct_scale": float(args.lowrank_direct_scale),
             "moe_expert_count": int(args.moe_expert_count),
             "moe_direct_scale": float(args.moe_direct_scale),
+            "viewbank_anchor_count": int(VIEWBANK_ANCHOR_COUNT) if str(args.decoder_output_mode) == "viewbank_transport" else 0,
+            "viewbank_feature_offset": int(viewbank_feature_offset),
+            "viewbank_cosine_bias_scale": float(args.viewbank_cosine_bias_scale),
+            "viewbank_direct_scale": float(args.viewbank_direct_scale),
             "texture_anchor_scale": float(args.texture_anchor_scale),
             "texture_anchor_reliability_power": float(args.texture_anchor_reliability_power),
             "texture_anchor_floor": float(args.texture_anchor_floor),
@@ -4033,6 +4181,10 @@ def main() -> int:
                 "texture_anchor/scale": float(args.texture_anchor_scale),
                 "texture_anchor/reliability_power": float(args.texture_anchor_reliability_power),
                 "texture_anchor/floor": float(args.texture_anchor_floor),
+                "viewbank/enabled": float(str(args.decoder_output_mode) == "viewbank_transport"),
+                "viewbank/anchor_count": float(VIEWBANK_ANCHOR_COUNT if str(args.decoder_output_mode) == "viewbank_transport" else 0),
+                "viewbank/cosine_bias_scale": float(args.viewbank_cosine_bias_scale),
+                "viewbank/direct_scale": float(args.viewbank_direct_scale),
                 "apply_delta_smooth/radius": float(args.apply_delta_smooth_radius),
                 "apply_delta_smooth/iterations": float(args.apply_delta_smooth_iterations),
                 "source_heldout/enabled": float(bool(source_heldout_payload.get("enabled", False))),

@@ -35,6 +35,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bbox_pad", type=int, default=8)
     parser.add_argument("--min_alpha", type=float, default=0.01)
     parser.add_argument("--high_error_quantile", type=float, default=0.0)
+    parser.add_argument(
+        "--residual_l1_key",
+        default="residual_l1",
+        help="NPZ field used for region scoring and high-error filtering.",
+    )
+    parser.add_argument(
+        "--residual_rgb_key",
+        default="residual_rgb",
+        help="Optional NPZ field used to report mean RGB residual for each region.",
+    )
     parser.add_argument("--max_views", type=int, default=0)
     parser.add_argument("--expand_faces_in_region_bbox", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--expand_min_face_pixels", type=int, default=12)
@@ -247,15 +257,17 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
     for view_path in paths:
         with np.load(view_path) as z:
-            if "face_id" not in z.files or "residual_l1" not in z.files:
+            residual_l1_key = str(args.residual_l1_key or "residual_l1")
+            residual_rgb_key = str(args.residual_rgb_key or "residual_rgb")
+            if "face_id" not in z.files or residual_l1_key not in z.files:
                 skipped_views += 1
                 continue
             face_id = z["face_id"].astype(np.int64)
-            residual_l1 = z["residual_l1"].astype(np.float32)
+            residual_l1 = z[residual_l1_key].astype(np.float32)
             alpha = z["alpha"].astype(np.float32) if "alpha" in z.files else np.ones_like(face_id, dtype=np.float32)
             if alpha.ndim == 3:
                 alpha = np.squeeze(alpha, axis=0)
-            residual_rgb = z["residual_rgb"].astype(np.float32) if "residual_rgb" in z.files else None
+            residual_rgb = z[residual_rgb_key].astype(np.float32) if residual_rgb_key in z.files else None
         for carrier_id, faces in carriers.items():
             region = region_for_carrier(
                 view_path=view_path,
@@ -477,6 +489,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "bbox_pad": int(args.bbox_pad),
             "min_alpha": float(args.min_alpha),
             "high_error_quantile": float(args.high_error_quantile),
+            "residual_l1_key": str(args.residual_l1_key),
+            "residual_rgb_key": str(args.residual_rgb_key),
             "max_views": int(args.max_views),
             "expand_faces_in_region_bbox": bool(args.expand_faces_in_region_bbox),
             "expand_min_face_pixels": int(args.expand_min_face_pixels),

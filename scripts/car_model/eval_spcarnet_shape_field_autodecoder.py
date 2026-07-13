@@ -54,6 +54,12 @@ from ss3dm_prior.mesh.marching_cubes import (  # noqa: E402
     surface_normal_consistency,
 )
 from ss3dm_prior.models.spcarnet_shape_field import SPCarShapeFieldDecoder  # noqa: E402
+from ss3dm_prior.training.spcarnet_autodecoder import (  # noqa: E402
+    ShapeFieldLossConfig,
+    ShapeFieldTrainConfig,
+    assemble_query_batch,
+    compute_losses,
+)
 
 
 # Locations searched for the source GLB by basename when the manifest path
@@ -76,6 +82,23 @@ def _bidirectional_chamfer_l1(a: np.ndarray, b: np.ndarray) -> float:
     fwd = d.min(dim=1).values.mean()
     bwd = d.min(dim=0).values.mean()
     return float(0.5 * (fwd + bwd).item())
+
+
+def _json_sanitize(value: Any) -> Any:
+    """Convert tensors/arrays/non-finite floats into strict-JSON values."""
+    if isinstance(value, dict):
+        return {str(k): _json_sanitize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_sanitize(v) for v in value]
+    if isinstance(value, np.ndarray):
+        return _json_sanitize(value.tolist())
+    if isinstance(value, np.generic):
+        return _json_sanitize(value.item())
+    if isinstance(value, torch.Tensor):
+        return _json_sanitize(value.detach().cpu().tolist())
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def _voxelise_points(points: np.ndarray, *, resolution: int, padding: float = 1.05) -> np.ndarray:
@@ -324,6 +347,98 @@ def _make_occupancy_fn(decoder: SPCarShapeFieldDecoder, z: torch.Tensor, device:
     return _fn
 
 
+def _load_resolved_loss_config(path: str | None) -> ShapeFieldLossConfig:
+    if not path:
+        return ShapeFieldLossConfig()
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"Missing resolved config: {p}")
+    with p.open() as f:
+        doc = json.load(f)
+    return ShapeFieldLossConfig.from_dict(doc.get("loss", doc.get("losses", {})))
+
+
+def _fit_latent_for_item(
+    *,
+    decoder: SPCarShapeFieldDecoder,
+    item: dict[str, Any],
+    init_z: torch.Tensor,
+    device: torch.device,
+    field_kind: str,
+    loss_cfg: ShapeFieldLossConfig,
+    fit_steps: int,
+    fit_lr: float,
+    fit_queries_surface: int,
+    fit_queries_free: int,
+    fit_queries_hard: int,
+    fit_queries_mixed: int,
+    fit_queries_band: int,
+    fit_band_epsilon: float,
+    seed: int,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """MAP-fit a held-out latent with the decoder frozen.
+
+    Stage-2 auto-decoders only store train-object latent rows. Held-out objects
+    therefore require a z-only clean-shape MAP fit to test decoder capacity; this
+    must be reported separately from amortised Stage-3 inference.
+    """
+    if fit_steps <= 0:
+        return init_z.detach(), {"fit_steps": 0, "fit_status": "disabled"}
+
+    was_training = decoder.training
+    decoder.eval()
+    old_requires_grad = [p.requires_grad for p in decoder.parameters()]
+    for p in decoder.parameters():
+        p.requires_grad_(False)
+
+    z = init_z.detach().clone().to(device).requires_grad_(True)
+    opt = torch.optim.Adam([z], lr=float(fit_lr))
+    rng = np.random.default_rng(seed)
+    train_cfg = ShapeFieldTrainConfig(
+        queries_surface=int(fit_queries_surface),
+        queries_free=int(fit_queries_free),
+        queries_hard=int(fit_queries_hard),
+        queries_mixed=int(fit_queries_mixed),
+        queries_band=int(fit_queries_band),
+        band_epsilon=float(fit_band_epsilon),
+        queries_eikonal=0,
+        device=str(device),
+    )
+    first_loss: float | None = None
+    final_loss: float | None = None
+    status = "ok"
+    for _step in range(int(fit_steps)):
+        q = assemble_query_batch(item, cfg=train_cfg, rng=rng, field_kind=field_kind)
+        queries = {k: v.unsqueeze(0).to(device, non_blocking=True) for k, v in q.items()}
+        opt.zero_grad(set_to_none=True)
+        loss, _metrics = compute_losses(
+            decoder,
+            z.unsqueeze(0),
+            queries,
+            loss_cfg=loss_cfg,
+            field_kind=field_kind,
+        )
+        if not torch.isfinite(loss):
+            status = "nonfinite_loss"
+            break
+        if first_loss is None:
+            first_loss = float(loss.detach().item())
+        final_loss = float(loss.detach().item())
+        loss.backward()
+        opt.step()
+
+    for p, req in zip(decoder.parameters(), old_requires_grad):
+        p.requires_grad_(req)
+    decoder.train(was_training)
+    return z.detach(), {
+        "fit_steps": int(fit_steps),
+        "fit_lr": float(fit_lr),
+        "fit_status": status,
+        "fit_loss_first": first_loss,
+        "fit_loss_final": final_loss,
+    }
+
+
 def evaluate(
     *,
     decoder: SPCarShapeFieldDecoder,
@@ -336,6 +451,18 @@ def evaluate(
     sample_count: int = 4096,
     iso_level: float = 0.5,
     limit: int = 0,
+    fit_missing_latents: bool = False,
+    fit_all_latents: bool = False,
+    loss_cfg: ShapeFieldLossConfig | None = None,
+    fit_steps: int = 0,
+    fit_lr: float = 1e-2,
+    fit_queries_surface: int = 384,
+    fit_queries_free: int = 384,
+    fit_queries_hard: int = 128,
+    fit_queries_mixed: int = 128,
+    fit_queries_band: int = 0,
+    fit_band_epsilon: float = 0.02,
+    fit_seed: int = 0,
 ) -> dict[str, Any]:
     metrics_per_object: list[dict[str, float]] = []
     n_total = len(dataset) if limit <= 0 else min(limit, len(dataset))
@@ -345,14 +472,66 @@ def evaluate(
 
     if manifest is None:
         manifest = {"dataset_root": None, "by_id": {}}
+    if loss_cfg is None:
+        loss_cfg = ShapeFieldLossConfig()
+    model_field_kind = getattr(decoder, "field_kind", "occupancy")
+    latent_mean = latent_table.detach().mean(dim=0).to(device)
 
     for i in range(n_total):
         item = dataset[i]
         oid = item["object_id"]
-        if oid not in object_id_to_row:
-            metrics_per_object.append({"object_id": oid, "skipped": True})
+        fit_info: dict[str, Any] = {}
+        if oid in object_id_to_row:
+            z = latent_table[object_id_to_row[oid]].detach()
+            latent_source = "train_table"
+            if fit_all_latents:
+                z, fit_info = _fit_latent_for_item(
+                    decoder=decoder,
+                    item=item,
+                    init_z=z,
+                    device=device,
+                    field_kind=model_field_kind,
+                    loss_cfg=loss_cfg,
+                    fit_steps=fit_steps,
+                    fit_lr=fit_lr,
+                    fit_queries_surface=fit_queries_surface,
+                    fit_queries_free=fit_queries_free,
+                    fit_queries_hard=fit_queries_hard,
+                    fit_queries_mixed=fit_queries_mixed,
+                    fit_queries_band=fit_queries_band,
+                    fit_band_epsilon=fit_band_epsilon,
+                    seed=fit_seed + i,
+                )
+                latent_source = "train_table_map_fit"
+        elif fit_missing_latents:
+            z, fit_info = _fit_latent_for_item(
+                decoder=decoder,
+                item=item,
+                init_z=latent_mean,
+                device=device,
+                field_kind=model_field_kind,
+                loss_cfg=loss_cfg,
+                fit_steps=fit_steps,
+                fit_lr=fit_lr,
+                fit_queries_surface=fit_queries_surface,
+                fit_queries_free=fit_queries_free,
+                fit_queries_hard=fit_queries_hard,
+                fit_queries_mixed=fit_queries_mixed,
+                fit_queries_band=fit_queries_band,
+                fit_band_epsilon=fit_band_epsilon,
+                seed=fit_seed + i,
+            )
+            latent_source = "heldout_map_fit"
+        else:
+            metrics_per_object.append(
+                {
+                    "object_id": oid,
+                    "skipped": True,
+                    "skip_reason": "missing_train_latent",
+                    "latent_source": "missing",
+                }
+            )
             continue
-        z = latent_table[object_id_to_row[oid]].detach()
 
         result = extract_patch_mesh(
             occupancy_fn=_make_occupancy_fn(decoder, z, device),
@@ -363,7 +542,13 @@ def evaluate(
         )
         if result.mesh is None:
             metrics_per_object.append(
-                {"object_id": oid, "extraction_success": 0, "vertex_count": result.vertex_count}
+                {
+                    "object_id": oid,
+                    "extraction_success": 0,
+                    "vertex_count": result.vertex_count,
+                    "latent_source": latent_source,
+                    **fit_info,
+                }
             )
             continue
 
@@ -433,6 +618,7 @@ def evaluate(
         metrics_per_object.append(
             {
                 "object_id": oid,
+                "latent_source": latent_source,
                 "extraction_success": 1,
                 "vertex_count": result.vertex_count,
                 "face_count": result.face_count,
@@ -443,6 +629,7 @@ def evaluate(
                 "mesh_iou_at_0.5_shell": float(iou_shell),
                 "iou_status": iou_status,
                 "surface_normal_consistency": normal_cos,
+                **fit_info,
             }
         )
         n_extracted += 1
@@ -464,6 +651,11 @@ def evaluate(
         "n_iou_filled": int(n_iou_filled),
         "n_iou_shell": int(n_iou_shell),
         "surface_normal_consistency_mean": _avg("surface_normal_consistency"),
+        "fit_missing_latents": bool(fit_missing_latents),
+        "fit_all_latents": bool(fit_all_latents),
+        "fit_steps": int(fit_steps),
+        "fit_queries_band": int(fit_queries_band),
+        "fit_band_epsilon": float(fit_band_epsilon),
     }
     return {"summary": summary, "per_object": metrics_per_object}
 
@@ -478,6 +670,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sample_count", type=int, default=4096)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--fit_missing_latents",
+        action="store_true",
+        help="MAP-fit z for objects not present in the train-time latent table; reports latent_source=heldout_map_fit.",
+    )
+    parser.add_argument(
+        "--fit_all_latents",
+        action="store_true",
+        help="Also refine train-table latents before extraction. This is an ablation, not default train eval.",
+    )
+    parser.add_argument("--fit_steps", type=int, default=100)
+    parser.add_argument("--fit_lr", type=float, default=1e-2)
+    parser.add_argument("--fit_queries_surface", type=int, default=384)
+    parser.add_argument("--fit_queries_free", type=int, default=384)
+    parser.add_argument("--fit_queries_hard", type=int, default=128)
+    parser.add_argument("--fit_queries_mixed", type=int, default=128)
+    parser.add_argument("--fit_queries_band", type=int, default=0)
+    parser.add_argument("--fit_band_epsilon", type=float, default=0.02)
+    parser.add_argument("--fit_seed", type=int, default=0)
+    parser.add_argument(
+        "--resolved_config",
+        default=None,
+        help="Optional resolved_config.json used to load training loss weights for z-only MAP fitting.",
+    )
+    parser.add_argument("--wandb_project", default=None)
+    parser.add_argument("--wandb_run_name", default=None)
+    parser.add_argument("--wandb_mode", default=None)
     parser.add_argument(
         "--manifest",
         default=str(
@@ -506,6 +725,7 @@ def main(argv: list[str] | None = None) -> int:
 
     dataset = SPCarObjectDataset(args.object_index, splits=tuple(args.splits))
     manifest = _load_manifest(Path(args.manifest)) if args.manifest else {"dataset_root": None, "by_id": {}}
+    loss_cfg = _load_resolved_loss_config(args.resolved_config)
     out = evaluate(
         decoder=decoder,
         latent_table=latent_table,
@@ -516,12 +736,66 @@ def main(argv: list[str] | None = None) -> int:
         mc_resolution=args.mc_resolution,
         sample_count=args.sample_count,
         limit=args.limit,
+        fit_missing_latents=bool(args.fit_missing_latents),
+        fit_all_latents=bool(args.fit_all_latents),
+        loss_cfg=loss_cfg,
+        fit_steps=int(args.fit_steps),
+        fit_lr=float(args.fit_lr),
+        fit_queries_surface=int(args.fit_queries_surface),
+        fit_queries_free=int(args.fit_queries_free),
+        fit_queries_hard=int(args.fit_queries_hard),
+        fit_queries_mixed=int(args.fit_queries_mixed),
+        fit_queries_band=int(args.fit_queries_band),
+        fit_band_epsilon=float(args.fit_band_epsilon),
+        fit_seed=int(args.fit_seed),
     )
     target = Path(args.output) if args.output else Path(args.checkpoint).with_suffix(".eval.json")
     target.parent.mkdir(parents=True, exist_ok=True)
+    out = _json_sanitize(out)
+    if args.wandb_project:
+        if args.wandb_mode:
+            os.environ["WANDB_MODE"] = args.wandb_mode
+        try:
+            import wandb  # type: ignore
+
+            run = wandb.init(
+                project=args.wandb_project,
+                name=args.wandb_run_name,
+                dir=str(target.parent),
+                config={
+                    "checkpoint": str(args.checkpoint),
+                    "object_index": str(args.object_index),
+                    "splits": list(args.splits),
+                    "mc_resolution": int(args.mc_resolution),
+                    "sample_count": int(args.sample_count),
+                    "limit": int(args.limit),
+                    "fit_missing_latents": bool(args.fit_missing_latents),
+                    "fit_all_latents": bool(args.fit_all_latents),
+                    "fit_steps": int(args.fit_steps),
+                    "fit_lr": float(args.fit_lr),
+                    "fit_queries_surface": int(args.fit_queries_surface),
+                    "fit_queries_free": int(args.fit_queries_free),
+                    "fit_queries_hard": int(args.fit_queries_hard),
+                    "fit_queries_mixed": int(args.fit_queries_mixed),
+                    "fit_queries_band": int(args.fit_queries_band),
+                    "fit_band_epsilon": float(args.fit_band_epsilon),
+                    "output": str(target),
+                },
+                reinit=True,
+            )
+            summary_metrics = {
+                f"eval/{k}": v
+                for k, v in out["summary"].items()
+                if isinstance(v, (int, float, bool))
+            }
+            wandb.log(summary_metrics)
+            run.summary.update(summary_metrics)
+            wandb.finish()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[stage2-eval] wandb logging failed: {type(exc).__name__}: {exc}", flush=True)
     with target.open("w") as f:
-        json.dump(out, f, indent=2)
-    print(json.dumps(out["summary"], indent=2))
+        json.dump(out, f, indent=2, allow_nan=False)
+    print(json.dumps(out["summary"], indent=2, allow_nan=False))
     return 0
 
 

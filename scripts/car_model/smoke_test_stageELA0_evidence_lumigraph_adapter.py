@@ -145,6 +145,35 @@ def main() -> int:
         assert isinstance(alpha_json["view_tail_candidate_stats"], list), alpha_json
         assert len(alpha_json["view_tail_candidate_stats"]) == 3, alpha_json
         assert alpha_json["accepted_bins"] > 0, alpha_json
+        balanced_alpha = fit_alpha_calibrator(
+            [support, target],
+            k=1,
+            mode="residual",
+            alpha_grid=[0.0, 0.5, 1.0],
+            calib_stride=1,
+            calib_max_views=2,
+            calib_sampler="uniform",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            bins=2,
+            min_bin_count=1,
+            view_tail_scale_grid=[1.0, 0.5, 0.0],
+            view_tail_min_gain=0.0,
+            view_tail_max_negative_fraction=0.0,
+            view_tail_objective="balanced",
+            view_tail_compute_lpips=False,
+            view_tail_metric_max_side=8,
+            device="cpu",
+        )
+        balanced_json = balanced_alpha.to_json()
+        assert balanced_json["view_tail_objective"] == "balanced", balanced_json
+        assert bool(balanced_json["view_tail_enabled"]), balanced_json
+        assert isinstance(balanced_json["view_tail_candidate_stats"], list), balanced_json
+        assert len(balanced_json["view_tail_candidate_stats"]) == 3, balanced_json
+        assert "mean_psnr_gain" in balanced_json["view_tail_candidate_stats"][0], balanced_json
+        assert "mean_ssim_gain" in balanced_json["view_tail_candidate_stats"][0], balanced_json
         adapted, info = adapt_frame(
             target,
             [support],

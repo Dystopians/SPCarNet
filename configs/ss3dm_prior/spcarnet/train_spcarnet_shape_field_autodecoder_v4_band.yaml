@@ -1,0 +1,34 @@
+# SP-CarNet Stage 2 v4 — training config for normal-band boundary supervision.
+
+train:
+  object_index_path: outputs/carnet/spcarnet/object_index_v1.json
+  train_splits: [train]
+  val_splits: [val]
+
+  output_dir: outputs/carnet/spcarnet/autodecoder_v4_band
+  run_name: spcarnet_autodecoder_v4_band
+
+  seed: 0
+  epochs: 300
+  batch_size: 8
+
+  queries_surface: 768
+  queries_free: 768
+  queries_hard: 256
+  queries_mixed: 256
+  queries_band: 256
+  band_epsilon: 0.025
+  queries_eikonal: 256
+
+  lr_decoder: 5.0e-4
+  lr_latent: 1.0e-3
+  weight_decay: 0.0
+  grad_clip: 1.0
+
+  log_every: 50
+  eval_every_epochs: 10
+  mc_resolution_smoke: 32
+  mc_resolution_full: 64
+
+  device: cuda
+  num_workers: 0

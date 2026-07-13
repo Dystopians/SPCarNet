@@ -1,0 +1,24 @@
+# SP-CarNet Stage 2 v4 — shape-field auto-decoder with normal-band boundary supervision.
+#
+# v4 keeps the v3 decoder capacity fixed and changes only the training objective:
+# clean surface normals generate an inside/outside band around each surface point,
+# giving Marching Cubes a sharper 0.5 occupancy crossing.
+
+model:
+  field_kind: occupancy
+  latent_dim: 512
+  hidden_dim: 768
+  depth: 8
+  num_fourier_freqs: 32
+  feature_dim: 0
+  latent_init_std: 0.01
+
+losses:
+  w_surf: 1.0
+  w_free: 1.0
+  w_hard: 0.5
+  w_mixed: 0.5
+  w_band: 0.5
+  w_zL2: 1.0e-4
+  w_eik: 0.1
+  w_normal: 0.0

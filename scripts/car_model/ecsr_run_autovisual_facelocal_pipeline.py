@@ -154,6 +154,11 @@ REPRESENTATION_DEFAULTS: dict[str, Any] = {
     "ela_alpha_view_tail_cvar_fraction": 0.25,
     "ela_alpha_view_tail_min_gain": -1.0e30,
     "ela_alpha_view_tail_max_negative_fraction": 1.0,
+    "ela_alpha_view_tail_objective": "mse",
+    "ela_alpha_view_tail_ssim_weight": 20.0,
+    "ela_alpha_view_tail_lpips_weight": 20.0,
+    "ela_alpha_view_tail_compute_lpips": False,
+    "ela_alpha_view_tail_metric_max_side": 512,
     "ela_alpha_region_risk_enable": False,
     "ela_alpha_region_risk_objective_bad_only": False,
     "ela_alpha_region_risk_objective_max_balanced_delta": 0.0,
@@ -787,6 +792,15 @@ PROFILE_DEFAULTS["field_region_render_risk_strict_v28"] = {
     "ela_alpha_view_tail_max_negative_fraction": 0.50,
 }
 
+PROFILE_DEFAULTS["field_region_render_risk_strict_v29"] = {
+    **PROFILE_DEFAULTS["field_region_render_risk_strict_v28"],
+    "ela_alpha_view_tail_objective": "balanced",
+    "ela_alpha_view_tail_ssim_weight": 20.0,
+    "ela_alpha_view_tail_lpips_weight": 20.0,
+    "ela_alpha_view_tail_compute_lpips": True,
+    "ela_alpha_view_tail_metric_max_side": 512,
+}
+
 PROFILE_FIELD_NAMES = tuple(next(iter(PROFILE_DEFAULTS.values())).keys())
 FIXED_PROFILE_NAMES = {
     "field_region_render_risk_strict_v1",
@@ -817,6 +831,7 @@ FIXED_PROFILE_NAMES = {
     "field_region_render_risk_strict_v26",
     "field_region_render_risk_strict_v27",
     "field_region_render_risk_strict_v28",
+    "field_region_render_risk_strict_v29",
 }
 PROFILE_CONTRACT_IDS = {
     "field_region_render_risk_strict_v1": "field_region_render_risk_strict_v1_fixed_train_only_no_scale_search",
@@ -847,6 +862,7 @@ PROFILE_CONTRACT_IDS = {
     "field_region_render_risk_strict_v26": "field_region_render_risk_strict_v26_render_layer_local_trust_reversible_residual",
     "field_region_render_risk_strict_v27": "field_region_render_risk_strict_v27_soft_local_trust_weighted_residual",
     "field_region_render_risk_strict_v28": "field_region_render_risk_strict_v28_view_tail_safe_alpha_shrink",
+    "field_region_render_risk_strict_v29": "field_region_render_risk_strict_v29_balanced_lpips_view_tail_alpha_shrink",
 }
 
 
@@ -1022,6 +1038,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ela_alpha_view_tail_cvar_fraction", type=float, default=None)
     parser.add_argument("--ela_alpha_view_tail_min_gain", type=float, default=None)
     parser.add_argument("--ela_alpha_view_tail_max_negative_fraction", type=float, default=None)
+    parser.add_argument("--ela_alpha_view_tail_objective", choices=("mse", "balanced"), default=None)
+    parser.add_argument("--ela_alpha_view_tail_ssim_weight", type=float, default=None)
+    parser.add_argument("--ela_alpha_view_tail_lpips_weight", type=float, default=None)
+    parser.add_argument("--ela_alpha_view_tail_compute_lpips", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--ela_alpha_view_tail_metric_max_side", type=int, default=None)
     parser.add_argument("--ela_alpha_region_risk_enable", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--ela_alpha_region_risk_min_tail_gain", type=float, default=None)
     parser.add_argument("--ela_alpha_region_risk_max_negative_fraction", type=float, default=None)
@@ -1326,6 +1347,13 @@ def parse_args() -> argparse.Namespace:
         or float(profile_value(args, "ela_alpha_view_tail_max_negative_fraction")) > 1.0
     ):
         parser.error("--ela_alpha_view_tail_max_negative_fraction must be in [0, 1]")
+    if str(profile_value(args, "ela_alpha_view_tail_objective")) not in {"mse", "balanced"}:
+        parser.error("--ela_alpha_view_tail_objective must be one of: mse, balanced")
+    for name in ("ela_alpha_view_tail_ssim_weight", "ela_alpha_view_tail_lpips_weight"):
+        if not math.isfinite(float(profile_value(args, name))):
+            parser.error(f"--{name} must be finite")
+    if int(profile_value(args, "ela_alpha_view_tail_metric_max_side")) < 0:
+        parser.error("--ela_alpha_view_tail_metric_max_side must be >= 0")
     if (
         not math.isfinite(float(profile_value(args, "ela_alpha_region_risk_max_negative_fraction")))
         or float(profile_value(args, "ela_alpha_region_risk_max_negative_fraction")) < 0.0
@@ -2923,6 +2951,14 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         f"--ela_alpha_view_tail_min_gain={profile_value(args, 'ela_alpha_view_tail_min_gain')}",
         "--ela_alpha_view_tail_max_negative_fraction",
         str(profile_value(args, "ela_alpha_view_tail_max_negative_fraction")),
+        "--ela_alpha_view_tail_objective",
+        str(profile_value(args, "ela_alpha_view_tail_objective")),
+        "--ela_alpha_view_tail_ssim_weight",
+        str(profile_value(args, "ela_alpha_view_tail_ssim_weight")),
+        "--ela_alpha_view_tail_lpips_weight",
+        str(profile_value(args, "ela_alpha_view_tail_lpips_weight")),
+        "--ela_alpha_view_tail_metric_max_side",
+        str(profile_value(args, "ela_alpha_view_tail_metric_max_side")),
         "--ela_alpha_region_risk_min_tail_gain",
         str(profile_value(args, "ela_alpha_region_risk_min_tail_gain")),
         "--ela_alpha_region_risk_max_negative_fraction",
@@ -2960,13 +2996,12 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
     ]
     if bool(profile_value(args, "ela_alpha_holdout_safe_zero")):
         command.append("--ela_alpha_holdout_safe_zero")
-    if bool(profile_value(args, "ela_alpha_region_risk_enable")):
-        command.append("--ela_alpha_region_risk_enable")
-        command.append(
-            "--ela_alpha_region_risk_objective_bad_only"
-            if bool(profile_value(args, "ela_alpha_region_risk_objective_bad_only"))
-            else "--no-ela_alpha_region_risk_objective_bad_only"
-        )
+    if bool(profile_value(args, "ela_alpha_view_tail_compute_lpips")):
+        command.append("--ela_alpha_view_tail_compute_lpips")
+    # The initial plan PhaseK replays Phase-J ELA before the train-render-region
+    # objective JSON exists. Keep region-risk enabled for candidate-owned refit
+    # and selector, where the JSON path is explicit, but do not pass a dangling
+    # enable flag here.
     if bool(profile_value(args, "ela_local_trust_gate")):
         command.append("--ela_local_trust_gate")
     if bool(profile_value(args, "delta_shared_residual_field")):
@@ -3225,6 +3260,8 @@ def candidate_owned_refit_command(args: argparse.Namespace, scene: str) -> Comma
     replace_arg(command, "--train_render_region_carrier_json", str(candidate_region_carrier))
     append_or_replace_arg(command, "--delta_facelocal_region_carrier_json", str(candidate_region_carrier))
     if bool(profile_value(args, "ela_alpha_region_risk_enable")):
+        if "--ela_alpha_region_risk_enable" not in command:
+            command.append("--ela_alpha_region_risk_enable")
         append_or_replace_arg(command, "--ela_alpha_region_risk_json", str(format_candidate_region_objective_path(args, scene)))
     allowed_face_ids = candidate_owned_refit_allowed_face_ids(args, scene)
     if allowed_face_ids:
@@ -3632,6 +3669,14 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
         f"--ela_alpha_view_tail_min_gain={profile_value(args, 'ela_alpha_view_tail_min_gain')}",
         "--ela_alpha_view_tail_max_negative_fraction",
         str(profile_value(args, "ela_alpha_view_tail_max_negative_fraction")),
+        "--ela_alpha_view_tail_objective",
+        str(profile_value(args, "ela_alpha_view_tail_objective")),
+        "--ela_alpha_view_tail_ssim_weight",
+        str(profile_value(args, "ela_alpha_view_tail_ssim_weight")),
+        "--ela_alpha_view_tail_lpips_weight",
+        str(profile_value(args, "ela_alpha_view_tail_lpips_weight")),
+        "--ela_alpha_view_tail_metric_max_side",
+        str(profile_value(args, "ela_alpha_view_tail_metric_max_side")),
         "--ela_local_trust_min_supports",
         str(profile_value(args, "ela_local_trust_min_supports")),
         "--ela_local_trust_max_residual_std",
@@ -3655,6 +3700,8 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
     ]
     if bool(profile_value(args, "ela_alpha_holdout_safe_zero")):
         command.append("--ela_alpha_holdout_safe_zero")
+    if bool(profile_value(args, "ela_alpha_view_tail_compute_lpips")):
+        command.append("--ela_alpha_view_tail_compute_lpips")
     if bool(profile_value(args, "ela_alpha_region_risk_enable")):
         command.extend(
             [
@@ -4033,6 +4080,7 @@ def write_manifest(args: argparse.Namespace, records: list[CommandRecord], scene
         f"- ELA local-trust confidence quantile/min: `{profile_value(args, 'ela_local_trust_confidence_quantile')}` / `{profile_value(args, 'ela_local_trust_min_confidence')}`",
         f"- ELA alpha view-tail scale grid: `{profile_value(args, 'ela_alpha_view_tail_scale_grid')}`",
         f"- ELA alpha view-tail cvar/min/neg: `{profile_value(args, 'ela_alpha_view_tail_cvar_fraction')}` / `{profile_value(args, 'ela_alpha_view_tail_min_gain')}` / `{profile_value(args, 'ela_alpha_view_tail_max_negative_fraction')}`",
+        f"- ELA alpha view-tail objective/LPIPS: `{profile_value(args, 'ela_alpha_view_tail_objective')}` / `{str(bool(profile_value(args, 'ela_alpha_view_tail_compute_lpips'))).lower()}`",
         f"- plan region gate min changed fraction: `{profile_value(args, 'plan_region_gate_min_changed_fraction')}`",
         f"- plan region gate max negative fraction: `{profile_value(args, 'plan_region_gate_max_negative_fraction')}`",
         f"- filter region source: `{profile_value(args, 'filter_region_source')}`",
@@ -4192,6 +4240,7 @@ def write_summary(args: argparse.Namespace, records: list[CommandRecord], scenes
         f"- ELA local-trust confidence quantile/min: `{profile_value(args, 'ela_local_trust_confidence_quantile')}` / `{profile_value(args, 'ela_local_trust_min_confidence')}`",
         f"- ELA alpha view-tail scale grid: `{profile_value(args, 'ela_alpha_view_tail_scale_grid')}`",
         f"- ELA alpha view-tail cvar/min/neg: `{profile_value(args, 'ela_alpha_view_tail_cvar_fraction')}` / `{profile_value(args, 'ela_alpha_view_tail_min_gain')}` / `{profile_value(args, 'ela_alpha_view_tail_max_negative_fraction')}`",
+        f"- ELA alpha view-tail objective/LPIPS: `{profile_value(args, 'ela_alpha_view_tail_objective')}` / `{str(bool(profile_value(args, 'ela_alpha_view_tail_compute_lpips'))).lower()}`",
         f"- plan region gate min changed fraction: `{profile_value(args, 'plan_region_gate_min_changed_fraction')}`",
         f"- plan region gate max negative fraction: `{profile_value(args, 'plan_region_gate_max_negative_fraction')}`",
         f"- filter region source: `{profile_value(args, 'filter_region_source')}`",

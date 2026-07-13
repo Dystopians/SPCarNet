@@ -105,6 +105,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source_model", type=Path, required=True)
     parser.add_argument("--evidence_dir", type=Path, required=True)
+    parser.add_argument(
+        "--residual_rgb_key",
+        default="residual_rgb",
+        help="NPZ field used as the RGB residual target for fitting. Defaults to the original GT-render residual.",
+    )
+    parser.add_argument(
+        "--residual_l1_key",
+        default="residual_l1",
+        help="NPZ field used for high-error sample selection. Defaults to the original residual_l1.",
+    )
     parser.add_argument("--output_model", type=Path, required=True)
     parser.add_argument("--iteration", type=int, default=26000)
     parser.add_argument("--top_k", type=int, default=2048)
@@ -1177,8 +1187,28 @@ def read_selected_faces(
     for fid in sorted(extra_ids - selected_ids):
         row = eligible_by_face.get(int(fid))
         if row is None:
-            continue
-        row = dict(row)
+            if expansion_index is None:
+                continue
+            expansion_pixels = int(expansion_index.face_expansion_pixels.get(int(fid), 0))
+            expansion_views = int(expansion_index.face_expansion_view_count.get(int(fid), 0))
+            if expansion_pixels <= 0 and expansion_views <= 0:
+                continue
+            row = {
+                "face_id": int(fid),
+                "score": float(max(expansion_pixels, 1)) * math.sqrt(float(max(expansion_views, 1))),
+                "pixel_count": float(max(expansion_pixels, 1)),
+                "view_hits": int(max(expansion_views, 1)),
+                "consistency": 1.0,
+                "mean_l1_error": 0.0,
+                "mean_residual_r": 0.0,
+                "mean_residual_g": 0.0,
+                "mean_residual_b": 0.0,
+                "candidate_region_expanded": 1.0,
+                "candidate_region_expansion_fallback_stats": 1.0,
+            }
+        else:
+            row = dict(row)
+            row["candidate_region_expansion_fallback_stats"] = 0.0
         row["candidate_region_expanded"] = 1.0
         extra_rows.append(row)
     extra_rows.sort(key=lambda r: (float(r["score"]), float(r["pixel_count"])), reverse=True)
@@ -1214,6 +1244,9 @@ def read_selected_faces(
             ),
             "candidate_region_expansion_carrier_count": float(
                 row.get("candidate_region_expansion_carrier_count", 0.0)
+            ),
+            "candidate_region_expansion_fallback_stats": float(
+                row.get("candidate_region_expansion_fallback_stats", 0.0)
             ),
         }
         for row in rows
@@ -1511,6 +1544,8 @@ def collect_samples(
     region_core_priority_face_ids: set[int] | None = None,
     region_core_priority_min_samples: int = 0,
     region_core_priority_min_fraction: float = 0.0,
+    residual_rgb_key: str = "residual_rgb",
+    residual_l1_key: str = "residual_l1",
 ) -> PixelSamples:
     selected = set(int(fid) for fid in selected_faces)
     priority_faces = {int(fid) for fid in (region_core_priority_face_ids or set())}
@@ -1537,7 +1572,9 @@ def collect_samples(
         if remaining <= 0:
             break
         with np.load(view_path) as z:
-            required = {"face_id", "residual_l1", "alpha", "residual_rgb", "camera_center"}
+            rgb_key = str(residual_rgb_key or "residual_rgb")
+            l1_key = str(residual_l1_key or "residual_l1")
+            required = {"face_id", l1_key, "alpha", rgb_key, "camera_center"}
             if not bool(uniform_barycentric):
                 required.update({"barycentric", "barycentric_valid"})
             missing = sorted(required - set(z.files))
@@ -1547,11 +1584,11 @@ def collect_samples(
                     "Rebuild the cache with barycentric maps or use --uniform_barycentric."
                 )
             face_id = z["face_id"].astype(np.int64)
-            residual_l1 = z["residual_l1"].astype(np.float32)
+            residual_l1 = z[l1_key].astype(np.float32)
             alpha = z["alpha"].astype(np.float32)
             if alpha.ndim == 3:
                 alpha = np.squeeze(alpha, axis=0)
-            residual_rgb = z["residual_rgb"].astype(np.float32)
+            residual_rgb = z[rgb_key].astype(np.float32)
             if bool(uniform_barycentric):
                 barycentric = np.empty((3,) + face_id.shape, dtype=np.float32)
                 bary_valid = np.ones_like(face_id, dtype=bool)
@@ -2587,6 +2624,8 @@ def summarize_crossfold_face_gain(
                 region_context_weight=float(args.region_context_weight),
                 region_outside_weight=float(args.region_outside_weight),
                 region_boundary_px=int(args.region_boundary_px),
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
             )
             fold_view_names = [p.stem for p in fold_paths]
         if fold_samples.count:
@@ -2810,6 +2849,8 @@ def build_patch_crossfold_cache(
             region_context_weight=float(args.region_context_weight),
             region_outside_weight=float(args.region_outside_weight),
             region_boundary_px=int(args.region_boundary_px),
+            residual_rgb_key=str(args.residual_rgb_key),
+            residual_l1_key=str(args.residual_l1_key),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -2968,6 +3009,8 @@ def build_carrier_holdout_cache(
                 region_context_weight=float(args.region_context_weight),
                 region_outside_weight=float(args.region_outside_weight),
                 region_boundary_px=int(args.region_boundary_px),
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
             )
         summary["sample_count"] = int(all_samples.count)
         sample_indices = np.arange(int(all_samples.count), dtype=np.int64)
@@ -3031,6 +3074,8 @@ def build_carrier_holdout_cache(
             region_context_weight=float(args.region_context_weight),
             region_outside_weight=float(args.region_outside_weight),
             region_boundary_px=int(args.region_boundary_px),
+            residual_rgb_key=str(args.residual_rgb_key),
+            residual_l1_key=str(args.residual_l1_key),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -6399,6 +6444,8 @@ def main() -> int:
         region_core_priority_face_ids=priority_expanded_faces,
         region_core_priority_min_samples=int(args.candidate_region_expansion_core_min_samples),
         region_core_priority_min_fraction=float(args.candidate_region_expansion_core_min_fraction),
+        residual_rgb_key=str(args.residual_rgb_key),
+        residual_l1_key=str(args.residual_l1_key),
     )
     val_samples = collect_samples(
         val_paths,
@@ -6420,6 +6467,8 @@ def main() -> int:
         region_core_priority_face_ids=priority_expanded_faces,
         region_core_priority_min_samples=int(args.candidate_region_expansion_core_min_samples),
         region_core_priority_min_fraction=float(args.candidate_region_expansion_core_min_fraction),
+        residual_rgb_key=str(args.residual_rgb_key),
+        residual_l1_key=str(args.residual_l1_key),
     )
     fit_core_priority_summary = summarize_region_bins_for_faces(fit_samples, priority_expanded_faces)
     policy_val_all_sample_count = int(val_samples.count)

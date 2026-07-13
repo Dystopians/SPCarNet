@@ -155,6 +155,8 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 args.teacher_render_mask_mode,
                 "--teacher_render_error_margin",
                 str(args.teacher_render_error_margin),
+                "--teacher_render_parent_delta_min",
+                str(args.teacher_render_parent_delta_min),
                 "--teacher_render_start_iter",
                 str(args.teacher_render_start_iter),
                 "--teacher_render_warmup_iters",
@@ -167,6 +169,13 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.teacher_render_decay_final_mult),
             ]
         )
+    teacher_mask_needs_parent = (
+        args.teacher_render_lambda > 0.0
+        and "parent" in str(args.teacher_render_mask_mode or "").strip().lower()
+        and bool(str(args.parent_render_rollback_dir or "").strip())
+    )
+    if teacher_mask_needs_parent and args.parent_render_rollback_lambda <= 0.0:
+        cmd.extend(["--parent_render_rollback_dir", args.parent_render_rollback_dir])
     if args.parent_render_rollback_lambda > 0.0:
         cmd.extend(
             [
@@ -369,6 +378,7 @@ def run(args: argparse.Namespace) -> int:
         "teacher_render_lambda": float(args.teacher_render_lambda),
         "teacher_render_dir": args.teacher_render_dir,
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
+        "teacher_render_parent_delta_min": float(args.teacher_render_parent_delta_min),
         "parent_render_rollback_lambda": float(args.parent_render_rollback_lambda),
         "parent_render_rollback_dir": args.parent_render_rollback_dir,
         "parent_render_rollback_aggregation": args.parent_render_rollback_aggregation,
@@ -472,6 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--teacher_render_dssim", type=float, default=0.0)
     parser.add_argument("--teacher_render_mask_mode", default="teacher_better")
     parser.add_argument("--teacher_render_error_margin", type=float, default=0.0)
+    parser.add_argument("--teacher_render_parent_delta_min", type=float, default=0.0)
     parser.add_argument("--teacher_render_start_iter", type=int, default=22000)
     parser.add_argument("--teacher_render_warmup_iters", type=int, default=300)
     parser.add_argument("--teacher_render_decay_start_iter", type=int, default=-1)

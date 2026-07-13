@@ -12,6 +12,80 @@ DEFAULT_SCENES = ["bicycle", "bonsai", "counter", "flowers", "garden", "kitchen"
 DEFAULT_ROOT = "outputs/carnet/meshsplatopt/ecsr_phase_v105_evidence_gated_mixture_hardtriad_20260625"
 DEFAULT_PREFIX = "v105_evidence_gated_mixture_summary"
 METRICS = ("PSNR", "SSIM", "LPIPS")
+REPORT_STEMS = (
+    "v107_crossfit_pod_moe_report",
+    "v106_pod_moe_report",
+    "v105_evidence_gated_mixture_report",
+)
+FIELD_ID_KEYS = [
+    "method_version",
+    "field_variant",
+    "basis_type",
+    "builder_variant",
+    "field_type",
+    "expert_names",
+    "gate_source",
+    "pod_expert_reliability_variant",
+    "pod_view_gate_mode",
+    "residual_dtype",
+    "renderer_scaling",
+    "ridge",
+    "residual_clip",
+    "min_count",
+    "min_views",
+    "view_gate_temperature",
+    "field_sha256",
+]
+FIELD_STAT_KEYS = [
+    "valid_triangles",
+    "mixture_triangles",
+    "fallback_only_triangles",
+    "gate_mean",
+    "gate_source",
+    "gain_score_mean",
+    "crossfit_gain_mean",
+    "crossfit_gain_supported_triangles",
+    "stability_score_mean",
+    "debt_guard_mean",
+    "elapsed_sec",
+    "total_accumulated_pixels",
+    "base_variant",
+    "expert_mse_certificate",
+    "expert_reliability_variant",
+    "expert_reliability_combine",
+    "pod_crossfit_split",
+    "pod_base_keep_mode",
+    "pod_view_gate_mode",
+    "detail_triangles",
+    "boundary_triangles",
+    "detail_reliability_mean",
+    "boundary_reliability_mean",
+    "detail_gain_mean",
+    "boundary_gain_mean",
+    "detail_full_gain_mean",
+    "boundary_full_gain_mean",
+    "detail_mse_scale_mean",
+    "boundary_mse_scale_mean",
+    "detail_debt_guard_mean",
+    "boundary_debt_guard_mean",
+    "detail_weighted_pixels",
+    "boundary_weighted_pixels",
+    "base_observed_triangles",
+    "base_mixture_triangles",
+    "base_gate_mean",
+    "base_gain_score_mean",
+    "base_debt_guard_mean",
+    "detail_crossfit_supported_triangles",
+    "boundary_crossfit_supported_triangles",
+    "detail_crossfit_gain_mean",
+    "boundary_crossfit_gain_mean",
+    "detail_crossfit_mse_scale_mean",
+    "boundary_crossfit_mse_scale_mean",
+    "detail_crossfit_even_fit_triangles",
+    "detail_crossfit_odd_fit_triangles",
+    "boundary_crossfit_even_fit_triangles",
+    "boundary_crossfit_odd_fit_triangles",
+]
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -28,11 +102,48 @@ def _metric(payload: dict[str, Any], section: str, name: str) -> float | None:
     return float(row[name])
 
 
+def _find_report_path(root: Path, scene: str) -> Path:
+    for stem in REPORT_STEMS:
+        candidate = root / scene / f"{scene}_{stem}.json"
+        if candidate.is_file():
+            return candidate
+    return root / scene / f"{scene}_{REPORT_STEMS[-1]}.json"
+
+
 def _mean(values: list[float | None]) -> float | None:
-    vals = [float(v) for v in values if v is not None]
+    vals = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            vals.append(float(value))
+        except (TypeError, ValueError):
+            continue
     if not vals:
         return None
     return sum(vals) / len(vals)
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and value == "":
+            continue
+        return value
+    return None
+
+
+def _safe_fraction(num: Any, den: Any) -> float | None:
+    if num is None or den in (None, 0):
+        return None
+    try:
+        den_f = float(den)
+        if den_f <= 0.0:
+            return None
+        return float(num) / den_f
+    except (TypeError, ValueError):
+        return None
 
 
 def _fmt(value: Any, signed: bool = False) -> str:
@@ -49,13 +160,24 @@ def build_summary(root: Path, scenes: list[str]) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     blockers: list[dict[str, Any]] = []
     for scene in scenes:
-        report_path = root / scene / f"{scene}_v105_evidence_gated_mixture_report.json"
+        report_path = _find_report_path(root, scene)
         if not report_path.is_file():
             row = {"scene": scene, "status": "missing", "present": False, "passed": False, "blocker": "missing_report_json", "report_path": str(report_path)}
             rows.append(row)
             blockers.append(row)
             continue
         report = _read_json(report_path)
+        field_manifest_path = str(report.get("field_manifest", "") or "")
+        field_manifest = _read_json(Path(field_manifest_path)) if field_manifest_path else {}
+        solve_stats = field_manifest.get("solve_stats", {}) if isinstance(field_manifest.get("solve_stats"), dict) else {}
+        field_identity = report.get("field_identity", {}) if isinstance(report.get("field_identity"), dict) else {}
+        manifest_identity = field_identity.get("manifest", {}) if isinstance(field_identity.get("manifest"), dict) else {}
+        render_stats = report.get("render_stats", {}) if isinstance(report.get("render_stats"), dict) else {}
+        render_field = (
+            render_stats.get("surface_residual_field", {})
+            if isinstance(render_stats.get("surface_residual_field"), dict)
+            else {}
+        )
         row: dict[str, Any] = {
             "scene": scene,
             "status": "ok" if bool(report.get("passed")) else "failed",
@@ -63,45 +185,42 @@ def build_summary(root: Path, scenes: list[str]) -> dict[str, Any]:
             "passed": bool(report.get("passed")),
             "blocker": "" if bool(report.get("passed")) else "report_passed_false",
             "report_path": str(report_path),
+            "field_manifest": field_manifest_path,
             "output_method": report.get("output_method"),
-            "support_source": report.get("render_stats", {}).get("support_source") if isinstance(report.get("render_stats"), dict) else None,
-            "no_test_gt_used_for_policy": report.get("render_stats", {}).get("no_test_gt_used_for_policy") if isinstance(report.get("render_stats"), dict) else None,
+            "support_source": render_stats.get("support_source"),
+            "no_test_gt_used_for_policy": render_stats.get("no_test_gt_used_for_policy"),
         }
+        for key in FIELD_ID_KEYS:
+            row[key] = _first_present(
+                render_field.get(key),
+                field_manifest.get(key),
+                manifest_identity.get(key),
+            )
         for prefix, section in [
             ("clean", "clean_metrics"),
             ("v104c", "v104c_metrics"),
-            ("v105", "metrics"),
+            ("candidate", "metrics"),
             ("endpoint", "reference_metrics"),
             ("v102", "v102_metrics"),
         ]:
             for metric in METRICS:
                 row[f"{prefix}_{metric}"] = _metric(report, section, metric)
         for metric in METRICS:
-            row[f"d{metric}_vs_clean"] = None if row[f"v105_{metric}"] is None or row[f"clean_{metric}"] is None else row[f"v105_{metric}"] - row[f"clean_{metric}"]
-            row[f"d{metric}_vs_v104c"] = None if row[f"v105_{metric}"] is None or row[f"v104c_{metric}"] is None else row[f"v105_{metric}"] - row[f"v104c_{metric}"]
-            row[f"d{metric}_vs_endpoint"] = None if row[f"v105_{metric}"] is None or row[f"endpoint_{metric}"] is None else row[f"v105_{metric}"] - row[f"endpoint_{metric}"]
-        stats = report.get("field_stats", {})
-        if isinstance(stats, dict):
-            for key in [
-                "valid_triangles",
-                "mixture_triangles",
-                "fallback_only_triangles",
-                "gate_mean",
-                "gate_source",
-                "gain_score_mean",
-                "crossfit_gain_mean",
-                "crossfit_gain_supported_triangles",
-                "stability_score_mean",
-                "debt_guard_mean",
-                "elapsed_sec",
-                "total_accumulated_pixels",
-            ]:
-                row[key] = stats.get(key)
-        render_stats = report.get("render_stats", {})
-        if isinstance(render_stats, dict):
-            row["render_elapsed_sec"] = render_stats.get("elapsed_sec")
-            row["mean_abs_delta"] = render_stats.get("mean_abs_delta")
-            row["mean_surface_valid_fraction"] = render_stats.get("mean_surface_valid_fraction")
+            row[f"v105_{metric}"] = row[f"candidate_{metric}"]
+        for metric in METRICS:
+            row[f"d{metric}_vs_clean"] = None if row[f"candidate_{metric}"] is None or row[f"clean_{metric}"] is None else row[f"candidate_{metric}"] - row[f"clean_{metric}"]
+            row[f"d{metric}_vs_v104c"] = None if row[f"candidate_{metric}"] is None or row[f"v104c_{metric}"] is None else row[f"candidate_{metric}"] - row[f"v104c_{metric}"]
+            row[f"d{metric}_vs_endpoint"] = None if row[f"candidate_{metric}"] is None or row[f"endpoint_{metric}"] is None else row[f"candidate_{metric}"] - row[f"endpoint_{metric}"]
+        stats = report.get("field_stats", {}) if isinstance(report.get("field_stats"), dict) else {}
+        for key in FIELD_STAT_KEYS:
+            row[key] = _first_present(stats.get(key), solve_stats.get(key), field_manifest.get(key))
+        row["detail_triangle_support_fraction"] = _safe_fraction(row.get("detail_triangles"), row.get("valid_triangles"))
+        row["boundary_triangle_support_fraction"] = _safe_fraction(row.get("boundary_triangles"), row.get("valid_triangles"))
+        row["detail_pixel_support_fraction"] = _safe_fraction(row.get("detail_weighted_pixels"), row.get("total_accumulated_pixels"))
+        row["boundary_pixel_support_fraction"] = _safe_fraction(row.get("boundary_weighted_pixels"), row.get("total_accumulated_pixels"))
+        row["render_elapsed_sec"] = render_stats.get("elapsed_sec")
+        row["mean_abs_delta"] = render_stats.get("mean_abs_delta")
+        row["mean_surface_valid_fraction"] = render_stats.get("mean_surface_valid_fraction")
         rows.append(row)
         if not bool(report.get("passed")):
             blockers.append(row)
@@ -109,24 +228,18 @@ def build_summary(root: Path, scenes: list[str]) -> dict[str, Any]:
     present_rows = [row for row in rows if row.get("present")]
     ok_rows = [row for row in present_rows if row.get("passed")]
     mean: dict[str, Any] = {}
-    for prefix in ("clean", "v104c", "v105", "endpoint", "v102"):
+    for prefix in ("clean", "v104c", "candidate", "v105", "endpoint", "v102"):
         for metric in METRICS:
             mean[f"{prefix}_{metric}"] = _mean([row.get(f"{prefix}_{metric}") for row in ok_rows])
     for metric in METRICS:
         mean[f"d{metric}_vs_clean"] = _mean([row.get(f"d{metric}_vs_clean") for row in ok_rows])
         mean[f"d{metric}_vs_v104c"] = _mean([row.get(f"d{metric}_vs_v104c") for row in ok_rows])
         mean[f"d{metric}_vs_endpoint"] = _mean([row.get(f"d{metric}_vs_endpoint") for row in ok_rows])
-    for key in [
-        "valid_triangles",
-        "mixture_triangles",
-        "fallback_only_triangles",
-        "gate_mean",
-        "gain_score_mean",
-        "crossfit_gain_mean",
-        "crossfit_gain_supported_triangles",
-        "stability_score_mean",
-        "debt_guard_mean",
-        "elapsed_sec",
+    for key in FIELD_STAT_KEYS + [
+        "detail_triangle_support_fraction",
+        "boundary_triangle_support_fraction",
+        "detail_pixel_support_fraction",
+        "boundary_pixel_support_fraction",
         "render_elapsed_sec",
         "mean_abs_delta",
         "mean_surface_valid_fraction",
@@ -144,7 +257,7 @@ def build_summary(root: Path, scenes: list[str]) -> dict[str, Any]:
         "blockers": blockers,
         "mean": mean,
         "rows": rows,
-        "claim_boundary": "v105 diagnostic target-delta mixture field; uses no held-out GT for policy but is not train-only unseen-camera generalization.",
+        "claim_boundary": "Diagnostic target-delta surface field; uses no held-out GT for policy but is not train-only unseen-camera generalization.",
     }
 
 
@@ -169,7 +282,7 @@ def write_outputs(summary: dict[str, Any], out_dir: Path, prefix: str) -> dict[s
 
     mean = summary["mean"]
     lines: list[str] = [
-        "# v105 Evidence-Gated Mixture Summary",
+        "# Surface Field Candidate Summary",
         "",
         f"- root: `{summary['root']}`",
         f"- scenes: `{len(summary['scenes'])}`",
@@ -187,7 +300,7 @@ def write_outputs(summary: dict[str, Any], out_dir: Path, prefix: str) -> dict[s
     for prefix_name, label in [
         ("clean", "clean"),
         ("v104c", "v104c"),
-        ("v105", "v105"),
+        ("candidate", "candidate surface field"),
         ("endpoint", "endpoint/reference"),
         ("v102", "v102"),
     ]:
@@ -201,30 +314,32 @@ def write_outputs(summary: dict[str, Any], out_dir: Path, prefix: str) -> dict[s
             "",
             "| comparison | dPSNR | dSSIM | dLPIPS |",
             "|---|---:|---:|---:|",
-            f"| v105 - clean | {_fmt(mean.get('dPSNR_vs_clean'), True)} | {_fmt(mean.get('dSSIM_vs_clean'), True)} | {_fmt(mean.get('dLPIPS_vs_clean'), True)} |",
-            f"| v105 - v104c | {_fmt(mean.get('dPSNR_vs_v104c'), True)} | {_fmt(mean.get('dSSIM_vs_v104c'), True)} | {_fmt(mean.get('dLPIPS_vs_v104c'), True)} |",
-            f"| v105 - endpoint/reference | {_fmt(mean.get('dPSNR_vs_endpoint'), True)} | {_fmt(mean.get('dSSIM_vs_endpoint'), True)} | {_fmt(mean.get('dLPIPS_vs_endpoint'), True)} |",
+            f"| candidate surface field - clean | {_fmt(mean.get('dPSNR_vs_clean'), True)} | {_fmt(mean.get('dSSIM_vs_clean'), True)} | {_fmt(mean.get('dLPIPS_vs_clean'), True)} |",
+            f"| candidate surface field - v104c | {_fmt(mean.get('dPSNR_vs_v104c'), True)} | {_fmt(mean.get('dSSIM_vs_v104c'), True)} | {_fmt(mean.get('dLPIPS_vs_v104c'), True)} |",
+            f"| candidate surface field - endpoint/reference | {_fmt(mean.get('dPSNR_vs_endpoint'), True)} | {_fmt(mean.get('dSSIM_vs_endpoint'), True)} | {_fmt(mean.get('dLPIPS_vs_endpoint'), True)} |",
             "",
             "## Per-Scene",
             "",
-            "| scene | status | clean PSNR | v104c PSNR | v105 PSNR | endpoint PSNR | dPSNR clean | dPSNR v104c | dPSNR endpoint | v105 SSIM | v105 LPIPS |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| scene | status | method | variant | clean PSNR | v104c PSNR | candidate PSNR | endpoint PSNR | dPSNR clean | dPSNR v104c | dPSNR endpoint | candidate SSIM | candidate LPIPS |",
+            "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for row in rows:
         lines.append(
-            "| {scene} | {status} | {clean_psnr} | {v104c_psnr} | {v105_psnr} | {endpoint_psnr} | {dclean} | {dv104c} | {dendpoint} | {ssim} | {lpips} |".format(
+            "| {scene} | {status} | {method} | {variant} | {clean_psnr} | {v104c_psnr} | {candidate_psnr} | {endpoint_psnr} | {dclean} | {dv104c} | {dendpoint} | {ssim} | {lpips} |".format(
                 scene=row.get("scene", ""),
                 status=row.get("status", ""),
+                method=row.get("method_version", ""),
+                variant=row.get("field_variant", ""),
                 clean_psnr=_fmt(row.get("clean_PSNR")),
                 v104c_psnr=_fmt(row.get("v104c_PSNR")),
-                v105_psnr=_fmt(row.get("v105_PSNR")),
+                candidate_psnr=_fmt(row.get("candidate_PSNR")),
                 endpoint_psnr=_fmt(row.get("endpoint_PSNR")),
                 dclean=_fmt(row.get("dPSNR_vs_clean"), True),
                 dv104c=_fmt(row.get("dPSNR_vs_v104c"), True),
                 dendpoint=_fmt(row.get("dPSNR_vs_endpoint"), True),
-                ssim=_fmt(row.get("v105_SSIM")),
-                lpips=_fmt(row.get("v105_LPIPS")),
+                ssim=_fmt(row.get("candidate_SSIM")),
+                lpips=_fmt(row.get("candidate_LPIPS")),
             )
         )
     lines.extend(
@@ -232,28 +347,52 @@ def write_outputs(summary: dict[str, Any], out_dir: Path, prefix: str) -> dict[s
             "",
             "## Field Diagnostics",
             "",
-            "| scene | status | gate source | valid triangles | mixture triangles | fallback only | gate mean | gain score mean | crossfit gain | crossfit support | stability mean | debt guard mean | field sec | render sec | mean abs delta |",
-            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| scene | status | variant | POD view gate | certificate | valid triangles | mixture triangles | detail triangles | boundary triangles | detail reliability | boundary reliability | detail gain | boundary gain | field sec | render sec | mean abs delta |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for row in rows:
         lines.append(
-            "| {scene} | {status} | {gate_source} | {valid} | {mix} | {fallback} | {gate} | {gain} | {crossfit_gain} | {crossfit_support} | {stable} | {debt_guard} | {field_sec} | {render_sec} | {mad} |".format(
+            "| {scene} | {status} | {variant} | {pod_gate} | {certificate} | {valid} | {mix} | {detail_tri} | {boundary_tri} | {detail_rel} | {boundary_rel} | {detail_gain} | {boundary_gain} | {field_sec} | {render_sec} | {mad} |".format(
                 scene=row.get("scene", ""),
                 status=row.get("status", ""),
-                gate_source=row.get("gate_source", ""),
+                variant=row.get("field_variant", ""),
+                pod_gate=row.get("pod_view_gate_mode", ""),
+                certificate=row.get("expert_mse_certificate", row.get("gate_source", "")),
                 valid=_fmt(row.get("valid_triangles")),
                 mix=_fmt(row.get("mixture_triangles")),
-                fallback=_fmt(row.get("fallback_only_triangles")),
-                gate=_fmt(row.get("gate_mean")),
-                gain=_fmt(row.get("gain_score_mean")),
-                crossfit_gain=_fmt(row.get("crossfit_gain_mean")),
-                crossfit_support=_fmt(row.get("crossfit_gain_supported_triangles")),
-                stable=_fmt(row.get("stability_score_mean")),
-                debt_guard=_fmt(row.get("debt_guard_mean")),
+                detail_tri=_fmt(row.get("detail_triangles")),
+                boundary_tri=_fmt(row.get("boundary_triangles")),
+                detail_rel=_fmt(row.get("detail_reliability_mean")),
+                boundary_rel=_fmt(row.get("boundary_reliability_mean")),
+                detail_gain=_fmt(row.get("detail_gain_mean")),
+                boundary_gain=_fmt(row.get("boundary_gain_mean")),
                 field_sec=_fmt(row.get("elapsed_sec")),
                 render_sec=_fmt(row.get("render_elapsed_sec")),
                 mad=_fmt(row.get("mean_abs_delta")),
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "## POD-MoE Support",
+            "",
+            "| scene | detail tri frac | boundary tri frac | detail pixel frac | boundary pixel frac | detail mse scale | boundary mse scale | detail debt guard | boundary debt guard |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for row in rows:
+        lines.append(
+            "| {scene} | {detail_tf} | {boundary_tf} | {detail_pf} | {boundary_pf} | {detail_scale} | {boundary_scale} | {detail_dg} | {boundary_dg} |".format(
+                scene=row.get("scene", ""),
+                detail_tf=_fmt(row.get("detail_triangle_support_fraction")),
+                boundary_tf=_fmt(row.get("boundary_triangle_support_fraction")),
+                detail_pf=_fmt(row.get("detail_pixel_support_fraction")),
+                boundary_pf=_fmt(row.get("boundary_pixel_support_fraction")),
+                detail_scale=_fmt(row.get("detail_mse_scale_mean")),
+                boundary_scale=_fmt(row.get("boundary_mse_scale_mean")),
+                detail_dg=_fmt(row.get("detail_debt_guard_mean")),
+                boundary_dg=_fmt(row.get("boundary_debt_guard_mean")),
             )
         )
     if summary.get("blockers"):
@@ -267,7 +406,7 @@ def write_outputs(summary: dict[str, Any], out_dir: Path, prefix: str) -> dict[s
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Summarize v105 evidence-gated mixture reports.")
+    parser = argparse.ArgumentParser(description="Summarize surface-field candidate reports.")
     parser.add_argument("--root", default=DEFAULT_ROOT)
     parser.add_argument("--scenes", nargs="+", default=DEFAULT_SCENES)
     parser.add_argument("--out_dir", default="")

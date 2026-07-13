@@ -1,0 +1,140 @@
+{
+  "description": "Same-evidence no-op/v41/v42 qualitative panel for the v42 surface residual atlas.",
+  "root": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware",
+  "selection_rule": "For each scene, choose held-out crops with the largest local v42-vs-no-op RGB error reduction among a small per-view-metric preselection, weighted by GT texture and penalized by local regressions.",
+  "out": "assets/spcarnet_v42_atlas_qualitative_panel.png",
+  "examples": [
+    {
+      "scene": "garden",
+      "view": "00015.png",
+      "ranking_score": 2.8228806831995976e-07,
+      "crop": {
+        "x": 844,
+        "y": 572,
+        "w": 320,
+        "h": 220,
+        "local_base_psnr": 22.362300919687872,
+        "local_candidate_psnr": 22.364451111515496,
+        "local_dpsnr": 0.002150191827624326,
+        "local_base_mae": 0.03827470913529396,
+        "local_candidate_mae": 0.03826121240854263,
+        "local_mae_drop_pct": 0.035262780714071795,
+        "local_positive_pixel_ratio": 0.011392045454545455,
+        "local_score": 7.915100468380842e-06
+      },
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_evidence_noop_compact_baseline/test/ours_26000_garden_evidence_noop_compact_baseline/gt/00015.png",
+        "noop": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_evidence_noop_compact_baseline/test/ours_26000_garden_evidence_noop_compact_baseline/renders/00015.png",
+        "v41": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_v41_facemean_expanded_region_texture_adapter/test/ours_26000_garden_v41_facemean_expanded_region_texture_adapter/renders/00015.png",
+        "v42": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_v42_ssimgate_confidence_weighted_region_texture_adapter/test/ours_26000_garden_v42_ssimgate_confidence_weighted_region_texture_adapter/renders/00015.png"
+      },
+      "full_delta": {
+        "dPSNR_v42_noop": 0.00026702880859375,
+        "dSSIM_v42_noop": 2.7418136596679688e-06,
+        "dLPIPS_v42_noop": -1.4066696166992188e-05,
+        "dPSNR_v42_v41": 0.000102996826171875,
+        "dSSIM_v42_v41": 1.6689300537109375e-06,
+        "dLPIPS_v42_v41": -6.034970283508301e-06
+      }
+    },
+    {
+      "scene": "room",
+      "view": "00005.png",
+      "ranking_score": 1.9592662377542177e-05,
+      "crop": {
+        "x": 132,
+        "y": 204,
+        "w": 320,
+        "h": 220,
+        "local_base_psnr": 22.475418942315887,
+        "local_candidate_psnr": 22.492858254817495,
+        "local_dpsnr": 0.01743931250160813,
+        "local_base_mae": 0.03323570266366005,
+        "local_candidate_mae": 0.03313355892896652,
+        "local_mae_drop_pct": 0.307331353054892,
+        "local_positive_pixel_ratio": 0.050582386363636364,
+        "local_score": 6.068152288207784e-05
+      },
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_evidence_noop_compact_baseline/test/ours_26000_room_evidence_noop_compact_baseline/gt/00005.png",
+        "noop": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_evidence_noop_compact_baseline/test/ours_26000_room_evidence_noop_compact_baseline/renders/00005.png",
+        "v41": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_v41_facemean_expanded_region_texture_adapter/test/ours_26000_room_v41_facemean_expanded_region_texture_adapter/renders/00005.png",
+        "v42": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_v42_ssimgate_confidence_weighted_region_texture_adapter/test/ours_26000_room_v42_ssimgate_confidence_weighted_region_texture_adapter/renders/00005.png"
+      },
+      "full_delta": {
+        "dPSNR_v42_noop": 0.0033130645751953125,
+        "dSSIM_v42_noop": 0.00017470121383666992,
+        "dLPIPS_v42_noop": -2.1904706954956055e-05,
+        "dPSNR_v42_v41": 0.002346038818359375,
+        "dSSIM_v42_v41": 0.0001175999641418457,
+        "dLPIPS_v42_v41": -1.6689300537109375e-05
+      }
+    },
+    {
+      "scene": "counter",
+      "view": "00007.png",
+      "ranking_score": 4.382141230003266e-05,
+      "crop": {
+        "x": 292,
+        "y": 188,
+        "w": 320,
+        "h": 220,
+        "local_base_psnr": 20.998969244131924,
+        "local_candidate_psnr": 21.029090529257132,
+        "local_dpsnr": 0.030121285125208175,
+        "local_base_mae": 0.047334495931863785,
+        "local_candidate_mae": 0.0471339114010334,
+        "local_mae_drop_pct": 0.4237597271958217,
+        "local_positive_pixel_ratio": 0.08987215909090909,
+        "local_score": 9.488359501119703e-05
+      },
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_evidence_noop_compact_baseline/test/ours_26000_counter_evidence_noop_compact_baseline/gt/00007.png",
+        "noop": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_evidence_noop_compact_baseline/test/ours_26000_counter_evidence_noop_compact_baseline/renders/00007.png",
+        "v41": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_v41_facemean_expanded_region_texture_adapter/test/ours_26000_counter_v41_facemean_expanded_region_texture_adapter/renders/00007.png",
+        "v42": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_v42_ssimgate_confidence_weighted_region_texture_adapter/test/ours_26000_counter_v42_ssimgate_confidence_weighted_region_texture_adapter/renders/00007.png"
+      },
+      "full_delta": {
+        "dPSNR_v42_noop": 0.008342742919921875,
+        "dSSIM_v42_noop": 2.1755695343017578e-05,
+        "dLPIPS_v42_noop": -4.10228967666626e-05,
+        "dPSNR_v42_v41": 0.005237579345703125,
+        "dSSIM_v42_v41": 1.3828277587890625e-05,
+        "dLPIPS_v42_v41": -2.35140323638916e-05
+      }
+    },
+    {
+      "scene": "bonsai",
+      "view": "00001.png",
+      "ranking_score": 5.220041889087321e-06,
+      "crop": {
+        "x": 592,
+        "y": 687,
+        "w": 320,
+        "h": 220,
+        "local_base_psnr": 18.41714286855656,
+        "local_candidate_psnr": 18.428587024869238,
+        "local_dpsnr": 0.011444156312677478,
+        "local_base_mae": 0.09527704119682312,
+        "local_candidate_mae": 0.09517291188240051,
+        "local_mae_drop_pct": 0.10929108745883208,
+        "local_positive_pixel_ratio": 0.05150568181818182,
+        "local_score": 4.542318856692873e-05
+      },
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_evidence_noop_compact_baseline/test/ours_26000_bonsai_evidence_noop_compact_baseline/gt/00001.png",
+        "noop": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_evidence_noop_compact_baseline/test/ours_26000_bonsai_evidence_noop_compact_baseline/renders/00001.png",
+        "v41": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_v41_facemean_expanded_region_texture_adapter/test/ours_26000_bonsai_v41_facemean_expanded_region_texture_adapter/renders/00001.png",
+        "v42": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_v42_ssimgate_confidence_weighted_region_texture_adapter/test/ours_26000_bonsai_v42_ssimgate_confidence_weighted_region_texture_adapter/renders/00001.png"
+      },
+      "full_delta": {
+        "dPSNR_v42_noop": 0.0035610198974609375,
+        "dSSIM_v42_noop": 2.372264862060547e-05,
+        "dLPIPS_v42_noop": -3.1441450119018555e-06,
+        "dPSNR_v42_v41": -0.001068115234375,
+        "dSSIM_v42_v41": -5.185604095458984e-06,
+        "dLPIPS_v42_v41": -1.2069940567016602e-06
+      }
+    }
+  ]
+}

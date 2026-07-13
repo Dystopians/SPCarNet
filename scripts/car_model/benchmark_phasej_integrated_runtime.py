@@ -152,6 +152,7 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- iteration: `{payload['loaded_iteration']}`",
         f"- views: `{payload['num_views']}`",
         f"- repeats: `{payload['repeats']}`",
+        f"- evidence max side: `{payload['evidence_max_side']}`",
         f"- mean ms/view: `{payload['ms_per_view_mean']:.6f}`",
         f"- mean FPS: `{payload['fps_mean']:.6f}`",
         f"- mean render ms/view: `{payload['render_ms_per_view_mean']:.6f}`",
@@ -199,6 +200,12 @@ def main() -> None:
     parser.add_argument("--view_stride", type=int, default=1)
     parser.add_argument("--warmup_views", type=int, default=1)
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument(
+        "--evidence_max_side",
+        type=int,
+        default=0,
+        help="Optional fast adapter path: compute ELA evidence warps at this maximum side before upsampling.",
+    )
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--label", default="")
     parser.add_argument("--out_json", required=True)
@@ -210,6 +217,8 @@ def main() -> None:
         parser.error("--max_views must be >= 0")
     if int(args.repeats) < 1:
         parser.error("--repeats must be >= 1")
+    if int(args.evidence_max_side) < 0:
+        parser.error("--evidence_max_side must be >= 0")
 
     torch.cuda.set_device(int(args.gpu))
     device = torch.device("cuda", int(args.gpu))
@@ -306,6 +315,7 @@ def main() -> None:
                     local_trust_min_confidence=float(policy["local_trust_min_confidence"]),
                     local_trust_mode=str(policy["local_trust_mode"]),
                     local_trust_min_weight=float(policy["local_trust_min_weight"]),
+                    evidence_max_side=int(args.evidence_max_side),
                     loader=loader,
                     device=device,
                 )
@@ -357,6 +367,7 @@ def main() -> None:
         "view_stride": int(args.view_stride),
         "warmup_views": int(len(warmup)),
         "repeats": int(len(repeat_rows)),
+        "evidence_max_side": int(args.evidence_max_side),
         "support_frame_count": int(len(support_frames)),
         "support_source": support_source,
         "missing_report_support_names": missing_support_names,

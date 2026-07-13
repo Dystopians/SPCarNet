@@ -32,10 +32,17 @@ from scripts.car_model.train_surface_conditioned_residual_unet import (  # noqa:
     _to_chw,
 )
 from scripts.car_model.train_perceptual_surface_residual_decoder import (  # noqa: E402
+    LOWRANK_TEXTURE_BASIS_COUNT,
+    LOWRANK_TEXTURE_BASIS_OFFSET,
     SurfaceResidualDecoder as PerceptualSurfaceResidualDecoder,
+    VIEWBANK_ANCHOR_COUNT,
+    VIEWBANK_ANCHOR_OFFSET,
+    _base_feature_dim as _decoder_base_feature_dim,
     _face_indices as _decoder_face_indices,
     _feature_dim as _decoder_feature_dim,
     _load_feature_rows as _decoder_load_feature_rows,
+    _surface_texture_flat_bin_ids as _decoder_surface_texture_flat_bin_ids,
+    _surface_texture_dim as _decoder_surface_texture_dim,
     _valid_mask as _decoder_valid_mask,
 )
 
@@ -231,23 +238,68 @@ def _policy_val_paths(evidence_dir: Path, stride: int, max_views: int) -> list[P
     return selected
 
 
-def _build_perceptual_decoder(checkpoint: dict[str, Any], device: torch.device) -> tuple[torch.nn.Module, np.ndarray]:
+def _build_perceptual_decoder(
+    checkpoint: dict[str, Any],
+    device: torch.device,
+) -> tuple[torch.nn.Module, np.ndarray, dict[str, Any] | None]:
     args = dict(checkpoint.get("args") or {})
     candidate_faces = np.asarray(checkpoint["candidate_faces"], dtype=np.int64)
     feature_mode = str(args.get("feature_mode", "basic"))
+    surface_feature_texture = checkpoint.get("surface_feature_texture")
+    surface_texture_dim = _decoder_surface_texture_dim(surface_feature_texture)
+    surface_texture_feature_offset = _decoder_base_feature_dim(feature_mode) if surface_texture_dim > 0 else -1
+    decoder_output_mode = str(args.get("decoder_output_mode", "direct"))
+    lowrank_basis_feature_offset = (
+        _decoder_base_feature_dim(feature_mode) + LOWRANK_TEXTURE_BASIS_OFFSET
+        if decoder_output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
+        else -1
+    )
+    viewbank_feature_offset = (
+        _decoder_base_feature_dim(feature_mode) + VIEWBANK_ANCHOR_OFFSET
+        if decoder_output_mode == "viewbank_transport"
+        else -1
+    )
     model = PerceptualSurfaceResidualDecoder(
         int(candidate_faces.size),
-        feature_dim=_decoder_feature_dim(feature_mode),
+        feature_dim=_decoder_feature_dim(feature_mode, surface_feature_texture),
         embedding_dim=int(args.get("embedding_dim", 12)),
         hidden_dim=int(args.get("hidden_dim", 96)),
         layers=int(args.get("layers", 3)),
         max_delta=float(args.get("max_delta", 0.20)),
         predict_confidence=bool(args.get("confidence_head", False)),
         confidence_floor=float(args.get("confidence_floor", 0.0)),
+        output_mode=decoder_output_mode,
+        lowrank_basis_count=(
+            LOWRANK_TEXTURE_BASIS_COUNT
+            if decoder_output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
+            else 0
+        ),
+        lowrank_basis_feature_offset=int(lowrank_basis_feature_offset),
+        lowrank_coeff_scale=float(args.get("lowrank_coeff_scale", 1.0)),
+        lowrank_direct_scale=float(args.get("lowrank_direct_scale", 0.25)),
+        moe_expert_count=int(args.get("moe_expert_count", 3)),
+        moe_direct_scale=float(args.get("moe_direct_scale", 0.35)),
+        surface_texture_feature_offset=int(surface_texture_feature_offset),
+        surface_texture_dim=int(surface_texture_dim),
+        texture_anchor_scale=float(args.get("texture_anchor_scale", 0.0)),
+        texture_anchor_reliability_power=float(args.get("texture_anchor_reliability_power", 1.0)),
+        texture_anchor_floor=float(args.get("texture_anchor_floor", 0.0)),
+        texture_anchor_use_holdout_confidence=bool(args.get("texture_anchor_use_holdout_confidence", False)),
+        viewbank_feature_offset=int(viewbank_feature_offset),
+        viewbank_anchor_count=VIEWBANK_ANCHOR_COUNT if decoder_output_mode == "viewbank_transport" else 0,
+        viewbank_cosine_bias_scale=float(args.get("viewbank_cosine_bias_scale", 2.0)),
+        viewbank_direct_scale=float(args.get("viewbank_direct_scale", 0.15)),
+        texture_latent_count=(
+            int(np.asarray(surface_feature_texture["features"], dtype=np.float32).shape[0])
+            if surface_feature_texture is not None and int(args.get("texture_latent_dim", 0)) > 0
+            else 0
+        ),
+        texture_latent_dim=int(args.get("texture_latent_dim", 0)),
+        texture_latent_init_std=float(args.get("texture_latent_init_std", 0.02)),
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device).eval()
-    return model, candidate_faces
+    return model, candidate_faces, surface_feature_texture
 
 
 def _predict_perceptual_delta_image(
@@ -259,6 +311,7 @@ def _predict_perceptual_delta_image(
     min_l1: float,
     min_alpha: float,
     feature_mode: str,
+    surface_feature_texture: dict[str, Any] | None,
     chunk_size: int,
     device: torch.device,
 ) -> np.ndarray:
@@ -281,10 +334,25 @@ def _predict_perceptual_delta_image(
         for start in range(0, int(ys.size), int(chunk_size)):
             end = min(int(ys.size), start + int(chunk_size))
             feat = torch.from_numpy(
-                _decoder_load_feature_rows(z, ys[start:end], xs[start:end], feature_mode=str(feature_mode))
+                _decoder_load_feature_rows(
+                    z,
+                    ys[start:end],
+                    xs[start:end],
+                    feature_mode=str(feature_mode),
+                    face_idx=face_idx[start:end],
+                    surface_feature_texture=surface_feature_texture,
+                )
             ).to(device)
             face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
-            pred = model(face_t, feat).detach().cpu().numpy().astype(np.float32)
+            texture_bin_idx = _decoder_surface_texture_flat_bin_ids(
+                z,
+                ys[start:end],
+                xs[start:end],
+                face_idx[start:end],
+                surface_feature_texture,
+            )
+            texture_bin_t = torch.from_numpy(texture_bin_idx.astype(np.int64)).to(device)
+            pred = model(face_t, feat, texture_bin_t).detach().cpu().numpy().astype(np.float32)
             delta[:, ys[start:end], xs[start:end]] = pred.T
     return delta
 
@@ -305,6 +373,7 @@ def _audit_policy_val(
     min_alpha: float,
     min_l1: float,
     feature_mode: str,
+    surface_feature_texture: dict[str, Any] | None,
     eval_tile: int,
     eval_overlap: int,
     eval_chunk_size: int,
@@ -341,6 +410,7 @@ def _audit_policy_val(
                     min_l1=float(min_l1),
                     min_alpha=float(min_alpha),
                     feature_mode=str(feature_mode),
+                    surface_feature_texture=surface_feature_texture,
                     chunk_size=int(eval_chunk_size),
                     device=device,
                 )
@@ -582,8 +652,9 @@ def main() -> int:
     alpha_conditioned_residual = bool(checkpoint_args.get("alpha_conditioned_residual", False))
     perceptual_feature_mode = str(checkpoint_args.get("feature_mode", "basic"))
     candidate_faces = None
+    surface_feature_texture = None
     if str(args.checkpoint_type) == "perceptual_surface_decoder":
-        model, candidate_faces = _build_perceptual_decoder(checkpoint, device)
+        model, candidate_faces, surface_feature_texture = _build_perceptual_decoder(checkpoint, device)
         face_lut = None
     else:
         model, face_lut = _build_model(checkpoint, device)
@@ -604,6 +675,7 @@ def main() -> int:
         min_alpha=float(args.min_alpha),
         min_l1=float(args.min_l1),
         feature_mode=perceptual_feature_mode,
+        surface_feature_texture=surface_feature_texture,
         eval_tile=int(args.eval_tile),
         eval_overlap=int(args.eval_overlap),
         eval_chunk_size=int(args.eval_chunk_size),

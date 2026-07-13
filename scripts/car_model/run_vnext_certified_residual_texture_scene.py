@@ -1355,6 +1355,8 @@ def parse_args() -> argparse.Namespace:
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
             "low_rank_view_texture_rich",
+            "full_rank_view_texture_rich",
+            "full_rank_surface_feature_rff_texture",
         ),
         default="face_uv_patch_mixture_ridge",
     )

@@ -912,6 +912,8 @@ def _compute_teacher_render_loss(
     dssim_weight: float,
     mask_mode: str = "none",
     error_margin: float = 0.0,
+    parent_cache: Optional[dict] = None,
+    parent_delta_min: float = 0.0,
 ):
     if lam <= 0.0 or not teacher_cache:
         return None
@@ -931,12 +933,50 @@ def _compute_teacher_render_loss(
     dssim_weight = min(1.0, max(0.0, float(dssim_weight)))
     mask = None
     mode = str(mask_mode or "none").strip().lower()
+    margin = float(max(0.0, error_margin))
+    parent = None
+    if "parent" in mode:
+        parent_cache = parent_cache or {}
+        parent = parent_cache.get(key, None)
+        if parent is None:
+            return None
+        parent = parent.to(device=image.device, dtype=image.dtype, non_blocking=True)
+        if parent.shape[-2:] != image.shape[-2:]:
+            parent = F.interpolate(
+                parent.unsqueeze(0),
+                size=(int(image.shape[-2]), int(image.shape[-1])),
+                mode="bilinear",
+                align_corners=False,
+            ).squeeze(0)
+        parent = torch.clamp(parent, 0.0, 1.0).detach()
     if mode == "teacher_better":
         pred_err = torch.mean(torch.abs(image.detach() - gt_image.detach()), dim=0, keepdim=True)
         teacher_err = torch.mean(torch.abs(teacher - gt_image.detach()), dim=0, keepdim=True)
-        mask = (teacher_err + float(max(0.0, error_margin)) < pred_err).to(dtype=image.dtype)
-        if float(mask.mean().detach().item()) <= 1e-6:
+        mask = (teacher_err + margin < pred_err).to(dtype=image.dtype)
+    elif mode in {
+        "teacher_better_than_parent",
+        "teacher_better_parent_changed",
+        "teacher_better_current_parent",
+        "teacher_better_current_parent_changed",
+        "teacher_parent_better_changed",
+    }:
+        if parent is None:
             return None
+        gt_detached = gt_image.detach()
+        teacher_err = torch.mean(torch.abs(teacher - gt_detached), dim=0, keepdim=True)
+        parent_err = torch.mean(torch.abs(parent - gt_detached), dim=0, keepdim=True)
+        parent_better_mask = teacher_err + margin < parent_err
+        current_better_mask = torch.ones_like(parent_better_mask, dtype=torch.bool)
+        if "current_parent" in mode:
+            pred_err = torch.mean(torch.abs(image.detach() - gt_detached), dim=0, keepdim=True)
+            current_better_mask = teacher_err + margin < pred_err
+        changed_mask = torch.ones_like(parent_better_mask, dtype=torch.bool)
+        if "changed" in mode:
+            teacher_parent_delta = torch.mean(torch.abs(teacher - parent), dim=0, keepdim=True)
+            changed_mask = teacher_parent_delta >= float(max(0.0, parent_delta_min))
+        mask = (parent_better_mask & current_better_mask & changed_mask).to(dtype=image.dtype)
+    if mask is not None and float(mask.mean().detach().item()) <= 1e-6:
+        return None
     if mask is not None:
         teacher_l1 = (torch.abs(image - teacher) * mask).sum() / torch.clamp(mask.sum() * image.shape[0], min=1.0)
     else:
@@ -3528,14 +3568,19 @@ def training(
         if len(teacher_render_cache) == 0:
             print("[TeacherRender] disabled for this run: no teacher renders were loaded.")
     parent_render_rollback_cache = {}
-    if bool(getattr(opt, "enable_parent_render_rollback_loss", False)):
+    teacher_mask_needs_parent = bool(getattr(opt, "enable_teacher_render_loss", False)) and (
+        "parent" in str(getattr(opt, "teacher_render_mask_mode", "")).strip().lower()
+    )
+    if bool(getattr(opt, "enable_parent_render_rollback_loss", False)) or teacher_mask_needs_parent:
         parent_render_rollback_cache = _load_teacher_render_cache(
             render_dir=str(getattr(opt, "parent_render_rollback_dir", "")),
             train_cameras=scene.getTrainCameras(),
             label="ParentRenderRollback",
         )
-        if len(parent_render_rollback_cache) == 0:
+        if len(parent_render_rollback_cache) == 0 and bool(getattr(opt, "enable_parent_render_rollback_loss", False)):
             print("[ParentRenderRollback] disabled for this run: no parent renders were loaded.")
+        if len(parent_render_rollback_cache) == 0 and teacher_mask_needs_parent:
+            print("[TeacherRender] parent-aware mask disabled for this run: no parent renders were loaded.")
     checkpoint_geometry_anchor_vertices = None
     if bool(getattr(opt, "enable_checkpoint_geometry_anchor", False)):
         checkpoint_geometry_anchor_vertices = triangles.vertices.detach().clone()
@@ -4008,6 +4053,8 @@ def training(
             dssim_weight=float(getattr(opt, "teacher_render_dssim", 0.2)),
             mask_mode=str(getattr(opt, "teacher_render_mask_mode", "none")),
             error_margin=float(getattr(opt, "teacher_render_error_margin", 0.0)),
+            parent_cache=parent_render_rollback_cache,
+            parent_delta_min=float(getattr(opt, "teacher_render_parent_delta_min", 0.0)),
         )
         if teacher_render_res is not None:
             teacher_render_loss_pure = teacher_render_res["loss_pure"]
